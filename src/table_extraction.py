@@ -3,6 +3,7 @@
 from typing import Optional, Tuple, List, Dict
 from pathlib import Path
 import json
+from PIL import Image
 
 
 def extract_tables_from_output(output_path: Path = Path("output"), save_path: str = "all_tables.json") -> Tuple[List[Dict], Dict]:
@@ -76,3 +77,55 @@ def extract_tables_from_output(output_path: Path = Path("output"), save_path: st
     return all_tables, stats
 
 
+def merge_consecutive_tables(found: list[dict], images_base_dir: Path) -> list[dict]:
+    """Merge tables split across pages."""
+    if len(found) <= 1:
+        return found
+    
+    merged = []
+    skip_next = False
+    
+    for i, t in enumerate(found):
+        if skip_next:
+            skip_next = False
+            continue
+        
+        # Check if should merge with next
+        if i + 1 < len(found):
+            t_next = found[i + 1]
+            page_diff = t_next['table']['page_idx'] - t['table']['page_idx']
+            same_doc = t['table']['source_doc'] == t_next['table']['source_doc']
+            
+            # Consecutive pages, same doc, first at bottom (y>500), second at top (y<150)
+            if (page_diff == 1 and same_doc and 
+                t['table']['bbox'][1] > 500 and 
+                t_next['table']['bbox'][1] < 150):
+                
+                # Merge images
+                img1 = Image.open(images_base_dir / t['table']['img_path'])
+                img2 = Image.open(images_base_dir / t_next['table']['img_path'])
+                
+                max_w = max(img1.width, img2.width)
+                combined = Image.new('RGB', (max_w, img1.height + img2.height), 'white')
+                combined.paste(img1, (0, 0))
+                combined.paste(img2, (0, img1.height))
+                
+                # Save merged image
+                merged_name = f"merged_{i}.jpg"
+                combined.save(images_base_dir / merged_name)
+                
+                # Create merged entry
+                merged_t = t.copy()
+                merged_t['table'] = t['table'].copy()
+                merged_t['table']['img_path'] = merged_name
+                merged_t['table']['table_body'] = t['table']['table_body'].replace('</table>', '') + t_next['table']['table_body'].replace('<table>', '')
+                merged_t['merged'] = True  # Flag for extraction to use image
+                
+                merged.append(merged_t)
+                skip_next = True
+                print(f"📎 Merged tables {i} and {i+1} (pages {t['table']['page_idx']} + {t_next['table']['page_idx']})")
+                continue
+        
+        merged.append(t)
+    
+    return merged

@@ -109,25 +109,27 @@ async def find_summary_compensation_in_doc(
         print(f"--- Table {i} (page {t.get('page_idx')}) ---")
         print(f"Type: {result.table_type.value} ({result.confidence:.2f})")
         
-        # Mostra immagine per summary_compensation
+        # Formatta reason con word wrap
+        print("Reason:")
+        for line in textwrap.wrap(result.reason, width=80):
+            print(f"  {line}")
+        
+        # Mostra immagine per tutte le tabelle
+        if img_path.exists() and img_path.is_file():
+            if display_func and plt_module and pil_image_class:
+                img = pil_image_class.open(img_path)
+                fig, ax = plt_module.subplots(figsize=(12, 8))
+                ax.imshow(img)
+                ax.axis('off')
+                plt_module.tight_layout(pad=0)
+                display_func(fig)
+                plt_module.close(fig)
+        else:
+            print(f"Image not found: {img_path}")
+        
+        # Salva solo summary_compensation in found
         if result.table_type == TableType.SUMMARY_COMPENSATION:
-            # Formatta reason con word wrap
-            print("Reason:")
-            for line in textwrap.wrap(result.reason, width=80):
-                print(f"  {line}")
-            
-            if img_path.exists() and img_path.is_file():
-                if display_func and plt_module and pil_image_class:
-                    img = pil_image_class.open(img_path)
-                    fig, ax = plt_module.subplots(figsize=(12, 8))
-                    ax.imshow(img)
-                    ax.axis('off')
-                    plt_module.tight_layout(pad=0)
-                    display_func(fig)
-                    plt_module.close(fig)
-            else:
-                print(f"Image not found: {img_path}")
-            found.append({'index': i, 'table': t, 'result': result})
+            found.append({'index': i, 'table': t, 'classification': result.model_dump()})
         
         print()
     
