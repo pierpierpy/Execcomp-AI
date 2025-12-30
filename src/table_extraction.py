@@ -220,9 +220,11 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
             merged_html_parts = []
             
             for t in tables_to_merge:
-                img_path = images_base_dir / t.get('img_path', '')
-                if img_path.exists():
-                    merged_images.append(Image.open(img_path))
+                img_path_str = t.get('img_path', '')
+                if img_path_str:  # Skip empty paths
+                    img_path = images_base_dir / img_path_str
+                    if img_path.exists() and img_path.is_file():
+                        merged_images.append(Image.open(img_path))
                 
                 html = t.get('table_body', '')
                 # Remove table tags for concatenation
