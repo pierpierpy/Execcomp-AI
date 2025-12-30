@@ -77,20 +77,21 @@ def extract_tables_from_output(output_path: Path = Path("output"), save_path: st
     return all_tables, stats
 
 
-def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_tables: list[dict]) -> list[dict]:
+def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_tables: list[dict], all_classifications: dict) -> list[dict]:
     """
-    Merge tables split across pages using header-only detection.
+    Merge tables split across pages using header detection.
     
     Logic:
     - Find tables with is_header_only=True (these are split table headers)
     - Look for subsequent tables that are physically close (same/next page, vertical distance < threshold)
-    - Merge until we find another header or distance is too large
+    - Merge until we find a table with has_header=True (new table starts) or distance is too large
     - Tables to merge don't need to be summary_compensation, just vertically close
     
     Args:
         found: List of classified summary_compensation tables
         images_base_dir: Path to images directory
         all_tables: ALL tables from the document (to find adjacent non-classified tables)
+        all_classifications: Dict mapping (page_idx, bbox) -> classification for ALL tables
     
     Returns:
         List with merged tables where applicable
@@ -115,9 +116,9 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
             continue
         
         classification = f.get('classification', {})
-        is_header = classification.get('is_header_only', False)
+        is_header_only = classification.get('is_header_only', False)
         
-        if not is_header:
+        if not is_header_only:
             # Not a header-only table, keep as-is
             merged_results.append(f)
             continue
@@ -142,9 +143,10 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
         
         # Collect tables to merge
         tables_to_merge = [header_table]
-        last_merged_table = header_table
         last_merged_page = header_page
         last_merged_bottom = header_bottom
+        
+        print(f"\n🔍 Starting merge from table {f['index']} (page {header_page}, is_header_only=True)")
         
         # Look at subsequent tables in doc_tables
         for next_idx in range(header_idx_in_doc + 1, len(doc_tables)):
@@ -162,37 +164,37 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
                 distance = 0
             else:
                 # Too far (different page, not at top)
+                print(f"   ❌ Table on page {next_page} too far (not adjacent page or not at top)")
                 break
             
-            # Check if this table is a header (stop condition)
-            # We need to check if this table was classified as header-only
-            is_next_header = False
-            for other_f in found:
-                other_table = other_f['table']
-                if (other_table.get('page_idx') == next_page and 
-                    other_table.get('bbox') == next_bbox):
-                    other_class = other_f.get('classification', {})
-                    is_next_header = other_class.get('is_header_only', False)
-                    break
-            
-            if is_next_header:
-                # Found another header, stop merging
-                break
-            
-            # Check distance threshold
+            # Check distance threshold first
             DISTANCE_THRESHOLD = 200
             if distance > DISTANCE_THRESHOLD:
+                print(f"   ❌ Distance {distance:.0f}px > {DISTANCE_THRESHOLD}px threshold")
+                break
+            
+            # Look up classification from all_classifications
+            next_key = (next_page, tuple(next_bbox))
+            next_classification = all_classifications.get(next_key, {})
+            has_header = next_classification.get('has_header', True)  # Default True = stop
+            
+            print(f"   📋 Next table page {next_page}, distance={distance:.0f}px, has_header={has_header}")
+            
+            # If this table has a header, it's a new table - stop merging
+            if has_header:
+                print(f"   ⛔ Stopping: next table has header (new table starts)")
                 break
             
             # Add this table to merge list
             tables_to_merge.append(next_table)
-            last_merged_table = next_table
             last_merged_page = next_page
             last_merged_bottom = next_bbox[3]
+            print(f"   ✅ Added to merge (has_header=False)")
         
         # Now merge all collected tables
         if len(tables_to_merge) == 1:
             # Only header, nothing to merge
+            print(f"   ℹ️ No tables to merge, keeping as-is")
             merged_results.append(f)
         else:
             # Merge images and HTML

@@ -75,7 +75,14 @@ async def find_summary_compensation_in_doc(
     plt_module=None,
     pil_image_class=None
 ):
-    """Cerca summary compensation tables in un singolo documento."""
+    """
+    Cerca summary compensation tables in un singolo documento.
+    
+    Returns:
+        Tuple of (found, all_classifications) where:
+        - found: list of summary_compensation tables
+        - all_classifications: dict mapping (page_idx, bbox) -> classification for ALL tables
+    """
     
     # Filtra tabelle di questo documento
     doc_tables = [t for t in all_tables if t.get('source_doc') == doc_source]
@@ -93,6 +100,7 @@ async def find_summary_compensation_in_doc(
         print("Metadata not found\n")
     
     found = []
+    all_classifications = {}  # Store ALL classifications
     
     for i, t in enumerate(doc_tables):
         # MinerU crea output/doc_source/doc_source/vlm/
@@ -106,8 +114,13 @@ async def find_summary_compensation_in_doc(
             print(f"Error on table {i}: {e}")
             continue
         
+        # Store classification for ALL tables (not just summary_compensation)
+        key = (t.get('page_idx'), tuple(t.get('bbox', [])))
+        all_classifications[key] = result.model_dump()
+        
         print(f"--- Table {i} (page {t.get('page_idx')}) ---")
         print(f"Type: {result.table_type.value} ({result.confidence:.2f})")
+        print(f"is_header_only: {result.is_header_only} | has_header: {result.has_header}")
         
         # Formatta reason con word wrap
         print("Reason:")
@@ -134,4 +147,4 @@ async def find_summary_compensation_in_doc(
         print()
     
     print(f"Found {len(found)} Summary Compensation Tables")
-    return found
+    return found, all_classifications

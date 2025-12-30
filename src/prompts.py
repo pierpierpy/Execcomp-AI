@@ -50,6 +50,11 @@ Determine if the table contains ONLY headers (column names like "Name", "Salary"
 - If the table has column headers but NO data rows with executive names and dollar values → is_header_only = True
 - If the table has actual executive names and compensation numbers → is_header_only = False
 
+## Has header detection:
+Determine if the table contains a header row (column names at the top).
+- If the table starts with a row containing column names (Name, Salary, Bonus, Year, Total, etc.) → has_header = True
+- If the table is a continuation of data without column names at the top → has_header = False
+
 ## Table to classify:
 
 Caption: {caption}
