@@ -124,12 +124,25 @@ def get_doc_id(doc) -> str:
     return f"{doc['cik']}_{doc['year']}_{doc['accession_number']}"
 
 
-def convert_docs_to_pdf(docs, text_fields: set = {'text'}):
-    """Convert all docs to PDF and save metadata."""
+def convert_docs_to_pdf(docs, base_path: Path = None, text_fields: set = {'text'}):
+    """Convert all docs to PDF and save metadata.
+    
+    Args:
+        docs: Documents to convert
+        base_path: Base path for pdfs/ and output/ directories. If None, uses current dir.
+        text_fields: Fields to exclude from metadata
+    """
+    base = Path(base_path) if base_path else Path(".")
+    pdfs_dir = base / PDFS_DIR
+    output_base = base / OUTPUT_DIR
+    
+    pdfs_dir.mkdir(exist_ok=True)
+    output_base.mkdir(exist_ok=True)
+    
     for i, doc in enumerate(tqdm(docs)):
         doc_id = get_doc_id(doc)
-        pdf_path = f"{PDFS_DIR}/{doc_id}.pdf"
-        output_dir = Path(f"{OUTPUT_DIR}/{doc_id}")
+        pdf_path = pdfs_dir / f"{doc_id}.pdf"
+        output_dir = output_base / doc_id
         
         # Salva metadati (escludendo campo text)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -139,14 +152,14 @@ def convert_docs_to_pdf(docs, text_fields: set = {'text'}):
             with open(metadata_path, 'w') as f:
                 json.dump(metadata, f, indent=2, default=json_serial)
         
-        if Path(pdf_path).exists():
+        if pdf_path.exists():
             continue
         
         # Try HTML first, then TXT
         if doc['htm_filing_link'] != 'NULL':
-            success = html_to_pdf(doc['htm_filing_link'], pdf_path)
+            success = html_to_pdf(doc['htm_filing_link'], str(pdf_path))
         else:
-            success = txt_to_pdf(doc['complete_text_filing_link'], pdf_path)
+            success = txt_to_pdf(doc['complete_text_filing_link'], str(pdf_path))
         
         if not success:
             print(f"Failed: {doc['cik']} {doc['year']}")

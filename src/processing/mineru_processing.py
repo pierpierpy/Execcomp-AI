@@ -18,17 +18,18 @@ def is_mineru_processed(output_dir: Path) -> bool:
     return len(content_files) > 0
 
 
-def process_pdf(pdf_path, semaphore: threading.Semaphore):
+def process_pdf(pdf_path, output_base: Path, semaphore: threading.Semaphore):
     """Process single PDF with MinerU.
     
     Args:
         pdf_path: Path to PDF file
+        output_base: Base output directory
         semaphore: Semaphore to limit concurrent requests
     
     Returns:
         tuple: (status, name, error_msg)
     """
-    output_dir = Path(f"{OUTPUT_DIR}/{pdf_path.stem}")
+    output_dir = output_base / pdf_path.stem
     
     if is_mineru_processed(output_dir):
         return 'skipped', pdf_path.name, None
@@ -50,19 +51,24 @@ def process_pdf(pdf_path, semaphore: threading.Semaphore):
         return 'success', pdf_path.name, None
 
 
-def process_pdfs_with_mineru(max_concurrent: int = DEFAULT_MAX_CONCURRENT):
+def process_pdfs_with_mineru(base_path: Path = None, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
     """Process all PDFs in pdfs/ folder with MinerU.
     
     Args:
+        base_path: Base path for pdfs/ and output/ directories. If None, uses current dir.
         max_concurrent: Maximum number of concurrent MinerU processes
     """
-    pdf_files = list(Path(PDFS_DIR).glob("*.pdf"))
+    base = Path(base_path) if base_path else Path(".")
+    pdfs_dir = base / PDFS_DIR
+    output_base = base / OUTPUT_DIR
+    
+    pdf_files = list(pdfs_dir.glob("*.pdf"))
     
     # Check which files need processing
     to_process = []
     skipped = []
     for pdf in pdf_files:
-        output_dir = Path(f"{OUTPUT_DIR}/{pdf.stem}")
+        output_dir = output_base / pdf.stem
         if is_mineru_processed(output_dir):
             skipped.append(pdf.name)
         else:
@@ -87,7 +93,7 @@ def process_pdfs_with_mineru(max_concurrent: int = DEFAULT_MAX_CONCURRENT):
     # Use more workers than semaphore allows - they'll queue up waiting for semaphore
     with ThreadPoolExecutor(max_workers=len(to_process)) as executor:
         futures = {
-            executor.submit(process_pdf, pdf, semaphore): pdf 
+            executor.submit(process_pdf, pdf, output_base, semaphore): pdf 
             for pdf in to_process
         }
         
