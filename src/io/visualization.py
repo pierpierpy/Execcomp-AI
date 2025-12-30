@@ -5,6 +5,10 @@ from typing import Any, Optional
 from IPython.display import display, HTML, Markdown
 import json
 
+# ============== CONFIGURATION ==============
+DISPLAY_MAX_WIDTH = 1000
+PREVIEW_MAX_WIDTH = 800
+
 
 def display_extraction_result(
     extracted_item: Any,
@@ -36,10 +40,9 @@ def display_extraction_result(
         full_img_path = base_path / "output" / source_doc / source_doc / "vlm" / img_path
         if full_img_path.exists():
             img = pil_image_class.open(full_img_path)
-            max_width = 1000
-            if img.width > max_width:
-                ratio = max_width / img.width
-                img = img.resize((max_width, int(img.height * ratio)))
+            if img.width > DISPLAY_MAX_WIDTH:
+                ratio = DISPLAY_MAX_WIDTH / img.width
+                img = img.resize((DISPLAY_MAX_WIDTH, int(img.height * ratio)))
             display(img)
     
     # JSON
@@ -108,10 +111,9 @@ def display_table_preview(
         full_path = base_path / "output" / source_doc / source_doc / "vlm" / img_path
         if full_path.exists():
             img = pil_image_class.open(full_path)
-            max_width = 800
-            if img.width > max_width:
-                ratio = max_width / img.width
-                img = img.resize((max_width, int(img.height * ratio)))
+            if img.width > PREVIEW_MAX_WIDTH:
+                ratio = PREVIEW_MAX_WIDTH / img.width
+                img = img.resize((PREVIEW_MAX_WIDTH, int(img.height * ratio)))
             display(img)
     
     if show_html:

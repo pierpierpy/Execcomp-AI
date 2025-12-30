@@ -10,6 +10,17 @@ import json
 from tqdm import tqdm
 from datetime import datetime, date
 
+# ============== CONFIGURATION ==============
+PDFS_DIR = "pdfs"
+OUTPUT_DIR = "output"
+USER_AGENT = "Research Bot"
+PDF_PAGE_SIZE = "A4"
+PDF_ORIENTATION = "Portrait"
+TXT_FONT_SIZE = 10
+TXT_LINES_PER_PAGE = 80
+TXT_CHAR_WIDTH = 6
+TXT_LINE_HEIGHT = 12
+
 
 def json_serial(obj):
     """JSON serializer for objects not serializable by default."""
@@ -21,7 +32,7 @@ def json_serial(obj):
 def html_to_pdf(url: str, output_path: str) -> bool:
     """Convert HTML to PDF."""
     try:
-        headers = {"User-Agent": "Research Bot"}
+        headers = {"User-Agent": USER_AGENT}
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         
@@ -35,8 +46,8 @@ def html_to_pdf(url: str, output_path: str) -> bool:
             'disable-javascript': '',
             'load-error-handling': 'ignore',
             'load-media-error-handling': 'ignore',
-            'page-size': 'A4',
-            'orientation': 'Portrait',
+            'page-size': PDF_PAGE_SIZE,
+            'orientation': PDF_ORIENTATION,
         }
         
         pdfkit.from_file(temp_path, output_path, options=options)
@@ -50,22 +61,22 @@ def html_to_pdf(url: str, output_path: str) -> bool:
 def txt_to_pdf(url: str, output_path: str) -> bool:
     """Convert TXT to PDF via image rendering."""
     try:
-        headers = {"User-Agent": "Research Bot"}
+        headers = {"User-Agent": USER_AGENT}
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         
         lines = response.text.split('\n')
         
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 10)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", TXT_FONT_SIZE)
         except:
             font = ImageFont.load_default()
         
-        char_width = 6
-        line_height = 12
+        char_width = TXT_CHAR_WIDTH
+        line_height = TXT_LINE_HEIGHT
         max_line_len = max(len(line) for line in lines) if lines else 80
         img_width = max(max_line_len * char_width + 40, 1200)
-        lines_per_page = 80
+        lines_per_page = TXT_LINES_PER_PAGE
         
         pages = [lines[i:i+lines_per_page] for i in range(0, len(lines), lines_per_page)]
         temp_images = []
@@ -117,8 +128,8 @@ def convert_docs_to_pdf(docs, text_fields: set = {'text'}):
     """Convert all docs to PDF and save metadata."""
     for i, doc in enumerate(tqdm(docs)):
         doc_id = get_doc_id(doc)
-        pdf_path = f"pdfs/{doc_id}.pdf"
-        output_dir = Path(f"output/{doc_id}")
+        pdf_path = f"{PDFS_DIR}/{doc_id}.pdf"
+        output_dir = Path(f"{OUTPUT_DIR}/{doc_id}")
         
         # Salva metadati (escludendo campo text)
         output_dir.mkdir(parents=True, exist_ok=True)

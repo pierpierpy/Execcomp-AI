@@ -8,6 +8,10 @@ from openai import AsyncOpenAI
 from .prompts import EXTRACTION_PROMPT, EXTRACTION_PROMPT_WITH_IMAGE
 from .schemas import Executive, SummaryCompensationTable
 
+# ============== CONFIGURATION ==============
+EXTRACT_MAX_TOKENS = 8000
+EXTRACT_TEMPERATURE = 0.0
+
 
 def load_image_b64(img_path: Path) -> Optional[str]:
     """Load image as base64 string."""
@@ -61,8 +65,8 @@ async def extract_summary_compensation_table(
     response = await client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": content}],
-        max_tokens=8000,  # Increased for large tables
-        temperature=0.0,
+        max_tokens=EXTRACT_MAX_TOKENS,
+        temperature=EXTRACT_TEMPERATURE,
         extra_body={"guided_json": SummaryCompensationTable.model_json_schema()}
     )
     

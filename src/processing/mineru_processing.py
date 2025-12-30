@@ -4,6 +4,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import threading
 
+# ============== CONFIGURATION ==============
+PDFS_DIR = "pdfs"
+OUTPUT_DIR = "output"
+MINERU_BACKEND = "vlm-http-client"
+MINERU_URL = "http://localhost:30000"
+DEFAULT_MAX_CONCURRENT = 4
+
 
 def is_mineru_processed(output_dir: Path) -> bool:
     """Check if MinerU has already processed this document."""
@@ -21,7 +28,7 @@ def process_pdf(pdf_path, semaphore: threading.Semaphore):
     Returns:
         tuple: (status, name, error_msg)
     """
-    output_dir = Path(f"output/{pdf_path.stem}")
+    output_dir = Path(f"{OUTPUT_DIR}/{pdf_path.stem}")
     
     if is_mineru_processed(output_dir):
         return 'skipped', pdf_path.name, None
@@ -32,8 +39,8 @@ def process_pdf(pdf_path, semaphore: threading.Semaphore):
             "mineru",
             "-p", str(pdf_path),
             "-o", str(output_dir),
-            "-b", "vlm-http-client",
-            "-u", "http://localhost:30000"
+            "-b", MINERU_BACKEND,
+            "-u", MINERU_URL
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -43,19 +50,19 @@ def process_pdf(pdf_path, semaphore: threading.Semaphore):
         return 'success', pdf_path.name, None
 
 
-def process_pdfs_with_mineru(max_concurrent: int = 4):
+def process_pdfs_with_mineru(max_concurrent: int = DEFAULT_MAX_CONCURRENT):
     """Process all PDFs in pdfs/ folder with MinerU.
     
     Args:
         max_concurrent: Maximum number of concurrent MinerU processes
     """
-    pdf_files = list(Path("pdfs").glob("*.pdf"))
+    pdf_files = list(Path(PDFS_DIR).glob("*.pdf"))
     
     # Check which files need processing
     to_process = []
     skipped = []
     for pdf in pdf_files:
-        output_dir = Path(f"output/{pdf.stem}")
+        output_dir = Path(f"{OUTPUT_DIR}/{pdf.stem}")
         if is_mineru_processed(output_dir):
             skipped.append(pdf.name)
         else:

@@ -8,6 +8,11 @@ import textwrap
 from .prompts import CLASSIFICATION_PROMPT
 from .schemas import TableType, TableClassification
 
+# ============== CONFIGURATION ==============
+CLASSIFY_MAX_TOKENS = 2000
+CLASSIFY_TEMPERATURE = 0.0
+TABLE_BODY_TRUNCATE = 2000  # Max chars to send for classification
+
 
 def load_image_b64(img_path: Path) -> Optional[str]:
     """Load image as base64 string."""
@@ -17,13 +22,12 @@ def load_image_b64(img_path: Path) -> Optional[str]:
     return None
 
 
-# 5. Funzione di classificazione (aggiornata)
 async def classify_table(table: dict, images_base_dir: Path, client: AsyncOpenAI, model: str) -> TableClassification:
     """Classify a single table using VLM with image."""
     
     caption = table.get('table_caption', [''])[0] if table.get('table_caption') else ''
     footnotes = ' '.join(table.get('table_footnote', []))
-    body = table.get('table_body', '')[:2000]
+    body = table.get('table_body', '')[:TABLE_BODY_TRUNCATE]
     
     prompt = CLASSIFICATION_PROMPT.format(
         caption=caption,
@@ -48,8 +52,8 @@ async def classify_table(table: dict, images_base_dir: Path, client: AsyncOpenAI
     r = await client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": content}],
-        max_tokens=2000,
-        temperature=0.0,
+        max_tokens=CLASSIFY_MAX_TOKENS,
+        temperature=CLASSIFY_TEMPERATURE,
         extra_body={"guided_json": TableClassification.model_json_schema()}
     )
     

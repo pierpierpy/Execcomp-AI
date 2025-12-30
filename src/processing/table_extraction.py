@@ -5,6 +5,12 @@ from pathlib import Path
 import json
 from PIL import Image
 
+from ..vlm.schemas import TableType
+
+# ============== CONFIGURATION ==============
+MERGE_DISTANCE_THRESHOLD = 200  # Max pixel distance between tables to merge
+MERGE_PAGE_TOP_THRESHOLD = 150  # Max y position to consider table "at top of page"
+
 
 def extract_tables_from_output(output_path: Path = Path("output"), save_path: str = "all_tables.json") -> Tuple[List[Dict], Dict]:
     """Extract all tables from MinerU output.
@@ -171,7 +177,7 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
             if next_page == last_merged_page:
                 # Same page: distance from bottom of last to top of next
                 distance = next_top - last_merged_bottom
-            elif next_page == last_merged_page + 1 and next_top < 150:
+            elif next_page == last_merged_page + 1 and next_top < MERGE_PAGE_TOP_THRESHOLD:
                 # Next page, table at top: consider it close
                 distance = 0
             else:
@@ -181,10 +187,9 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
                 break
             
             # Check distance threshold first
-            DISTANCE_THRESHOLD = 200
-            if distance > DISTANCE_THRESHOLD:
+            if distance > MERGE_DISTANCE_THRESHOLD:
                 if debug:
-                    print(f"   ❌ Distance {distance:.0f}px > {DISTANCE_THRESHOLD}px threshold")
+                    print(f"   ❌ Distance {distance:.0f}px > {MERGE_DISTANCE_THRESHOLD}px threshold")
                 break
             
             # Look up classification from all_classifications
