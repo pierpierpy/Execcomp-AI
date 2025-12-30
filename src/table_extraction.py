@@ -77,7 +77,7 @@ def extract_tables_from_output(output_path: Path = Path("output"), save_path: st
     return all_tables, stats
 
 
-def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_tables: list[dict], all_classifications: dict) -> list[dict]:
+def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_tables: list[dict], all_classifications: dict, debug: bool = False) -> list[dict]:
     """
     Merge tables split across pages using header detection.
     
@@ -92,6 +92,7 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
         images_base_dir: Path to images directory
         all_tables: ALL tables from the document (to find adjacent non-classified tables)
         all_classifications: Dict mapping (page_idx, bbox) -> classification for ALL tables
+        debug: If True, print detailed merge information
     
     Returns:
         List with merged tables where applicable
@@ -146,7 +147,8 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
         last_merged_page = header_page
         last_merged_bottom = header_bottom
         
-        print(f"\n🔍 Starting merge from table {f['index']} (page {header_page}, is_header_only=True)")
+        if debug:
+            print(f"\n🔍 Starting merge from table {f['index']} (page {header_page}, is_header_only=True)")
         
         # Look at subsequent tables in doc_tables
         for next_idx in range(header_idx_in_doc + 1, len(doc_tables)):
@@ -164,13 +166,15 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
                 distance = 0
             else:
                 # Too far (different page, not at top)
-                print(f"   ❌ Table on page {next_page} too far (not adjacent page or not at top)")
+                if debug:
+                    print(f"   ❌ Table on page {next_page} too far (not adjacent page or not at top)")
                 break
             
             # Check distance threshold first
             DISTANCE_THRESHOLD = 200
             if distance > DISTANCE_THRESHOLD:
-                print(f"   ❌ Distance {distance:.0f}px > {DISTANCE_THRESHOLD}px threshold")
+                if debug:
+                    print(f"   ❌ Distance {distance:.0f}px > {DISTANCE_THRESHOLD}px threshold")
                 break
             
             # Look up classification from all_classifications
@@ -178,23 +182,27 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
             next_classification = all_classifications.get(next_key, {})
             has_header = next_classification.get('has_header', True)  # Default True = stop
             
-            print(f"   📋 Next table page {next_page}, distance={distance:.0f}px, has_header={has_header}")
+            if debug:
+                print(f"   📋 Next table page {next_page}, distance={distance:.0f}px, has_header={has_header}")
             
             # If this table has a header, it's a new table - stop merging
             if has_header:
-                print(f"   ⛔ Stopping: next table has header (new table starts)")
+                if debug:
+                    print(f"   ⛔ Stopping: next table has header (new table starts)")
                 break
             
             # Add this table to merge list
             tables_to_merge.append(next_table)
             last_merged_page = next_page
             last_merged_bottom = next_bbox[3]
-            print(f"   ✅ Added to merge (has_header=False)")
+            if debug:
+                print(f"   ✅ Added to merge (has_header=False)")
         
         # Now merge all collected tables
         if len(tables_to_merge) == 1:
             # Only header, nothing to merge
-            print(f"   ℹ️ No tables to merge, keeping as-is")
+            if debug:
+                print(f"   ℹ️ No tables to merge, keeping as-is")
             merged_results.append(f)
         else:
             # Merge images and HTML
@@ -242,6 +250,7 @@ def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_table
             merged_results.append(merged_entry)
             
             pages_merged = sorted(set(t.get('page_idx', 0) for t in tables_to_merge))
-            print(f"📎 Merged {len(tables_to_merge)} tables (pages {pages_merged})")
+            if debug:
+                print(f"📎 Merged {len(tables_to_merge)} tables (pages {pages_merged})")
     
     return merged_results
