@@ -28,17 +28,20 @@ CUDA_VISIBLE_DEVICES=2,3 mineru-openai-server --engine vllm --port 30000 \
 
 ### 2. Run Pipeline
 
-Open `pipeline.ipynb`:
+Open `pipeline.ipynb` and run cells in order:
 
-```python
-# Cell 2: Load documents from data/DEF14A_all.jsonl
-# Cell 3: Convert to PDF + Extract tables with MinerU
-# Cell 10: Run extraction on all documents
-```
+1. **Cell 2** - Load SEC filings from `data/DEF14A_all.jsonl` (on Hugging Face `pierjoe/SEC-DEF14A-2005-2022`)
+2. **Cell 3** - Convert to PDF + extract tables with MinerU
+3. **Cell 4** - Count documents with/without tables
+4. **Cell 10** - Run classification + extraction on all documents
 
-### 3. Create HuggingFace Dataset
-
-Open `create_HF_ds.ipynb` to collect results and push to HF.
+The pipeline will:
+- Skip **funds** (SIC = NULL) - they don't have exec compensation
+- Skip **already processed** documents (checks for `extraction_results.json`)
+- **Classify** each table using VLM (summary_compensation, director_compensation, etc.)
+- **Merge** tables split across pages (detects header-only tables)
+- **Extract** structured JSON from Summary Compensation Tables
+- **Save** results to `output/{doc_id}/`
 
 ## Example
 
