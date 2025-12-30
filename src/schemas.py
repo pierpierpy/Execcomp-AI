@@ -24,6 +24,7 @@ class TableClassification(BaseModel):
     table_type: TableType = Field(description="Type of table identified")
     confidence: float = Field(description="Confidence score 0-1")
     reason: str = Field(description="Brief explanation for classification")
+    is_header_only: bool = Field(default=False, description="True if table contains only column headers without actual executive data rows")
 
 
 # ============== Extraction Schemas ==============

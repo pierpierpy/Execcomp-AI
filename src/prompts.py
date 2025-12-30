@@ -45,6 +45,11 @@ CLASSIFICATION_PROMPT = """Classify this table from an SEC DEF 14A proxy stateme
 - MUST show actual compensation, not percentages or hypotheticals
 - Tables showing ONLY percentages or ONLY one component (just bonus, just salary) are compensation_analysis, NOT summary_compensation
 
+## Header-only detection:
+Determine if the table contains ONLY headers (column names like "Name", "Salary", "Bonus", "Year", "Stock Awards", "Total", etc.) WITHOUT actual executive compensation data rows with dollar amounts.
+- If the table has column headers but NO data rows with executive names and dollar values → is_header_only = True
+- If the table has actual executive names and compensation numbers → is_header_only = False
+
 ## Table to classify:
 
 Caption: {caption}

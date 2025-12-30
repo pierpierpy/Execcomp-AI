@@ -77,55 +77,169 @@ def extract_tables_from_output(output_path: Path = Path("output"), save_path: st
     return all_tables, stats
 
 
-def merge_consecutive_tables(found: list[dict], images_base_dir: Path) -> list[dict]:
-    """Merge tables split across pages."""
-    if len(found) <= 1:
+def merge_consecutive_tables(found: list[dict], images_base_dir: Path, all_tables: list[dict]) -> list[dict]:
+    """
+    Merge tables split across pages using header-only detection.
+    
+    Logic:
+    - Find tables with is_header_only=True (these are split table headers)
+    - Look for subsequent tables that are physically close (same/next page, vertical distance < threshold)
+    - Merge until we find another header or distance is too large
+    - Tables to merge don't need to be summary_compensation, just vertically close
+    
+    Args:
+        found: List of classified summary_compensation tables
+        images_base_dir: Path to images directory
+        all_tables: ALL tables from the document (to find adjacent non-classified tables)
+    
+    Returns:
+        List with merged tables where applicable
+    """
+    if len(found) == 0:
         return found
     
-    merged = []
-    skip_next = False
+    # Get source doc from first found table
+    source_doc = found[0]['table']['source_doc']
     
-    for i, t in enumerate(found):
-        if skip_next:
-            skip_next = False
+    # Get all tables from this document, sorted by page and vertical position
+    doc_tables = sorted(
+        [t for t in all_tables if t.get('source_doc') == source_doc],
+        key=lambda x: (x.get('page_idx', 0), x.get('bbox', [0, 0, 0, 0])[1])
+    )
+    
+    merged_results = []
+    processed_indices = set()
+    
+    for f_idx, f in enumerate(found):
+        if f_idx in processed_indices:
             continue
         
-        # Check if should merge with next
-        if i + 1 < len(found):
-            t_next = found[i + 1]
-            page_diff = t_next['table']['page_idx'] - t['table']['page_idx']
-            same_doc = t['table']['source_doc'] == t_next['table']['source_doc']
+        classification = f.get('classification', {})
+        is_header = classification.get('is_header_only', False)
+        
+        if not is_header:
+            # Not a header-only table, keep as-is
+            merged_results.append(f)
+            continue
+        
+        # This is a header-only table - look for data tables to merge
+        header_table = f['table']
+        header_page = header_table.get('page_idx', 0)
+        header_bbox = header_table.get('bbox', [0, 0, 0, 0])
+        header_bottom = header_bbox[3]  # y2 coordinate (bottom of header)
+        
+        # Find the index of this table in all doc_tables
+        header_idx_in_doc = None
+        for i, dt in enumerate(doc_tables):
+            if (dt.get('page_idx') == header_page and 
+                dt.get('bbox') == header_bbox):
+                header_idx_in_doc = i
+                break
+        
+        if header_idx_in_doc is None:
+            merged_results.append(f)
+            continue
+        
+        # Collect tables to merge
+        tables_to_merge = [header_table]
+        last_merged_table = header_table
+        last_merged_page = header_page
+        last_merged_bottom = header_bottom
+        
+        # Look at subsequent tables in doc_tables
+        for next_idx in range(header_idx_in_doc + 1, len(doc_tables)):
+            next_table = doc_tables[next_idx]
+            next_page = next_table.get('page_idx', 0)
+            next_bbox = next_table.get('bbox', [0, 0, 0, 0])
+            next_top = next_bbox[1]  # y1 coordinate (top of next table)
             
-            # Consecutive pages, same doc, first at bottom (y>500), second at top (y<150)
-            if (page_diff == 1 and same_doc and 
-                t['table']['bbox'][1] > 500 and 
-                t_next['table']['bbox'][1] < 150):
+            # Calculate vertical distance
+            if next_page == last_merged_page:
+                # Same page: distance from bottom of last to top of next
+                distance = next_top - last_merged_bottom
+            elif next_page == last_merged_page + 1 and next_top < 150:
+                # Next page, table at top: consider it close
+                distance = 0
+            else:
+                # Too far (different page, not at top)
+                break
+            
+            # Check if this table is a header (stop condition)
+            # We need to check if this table was classified as header-only
+            is_next_header = False
+            for other_f in found:
+                other_table = other_f['table']
+                if (other_table.get('page_idx') == next_page and 
+                    other_table.get('bbox') == next_bbox):
+                    other_class = other_f.get('classification', {})
+                    is_next_header = other_class.get('is_header_only', False)
+                    break
+            
+            if is_next_header:
+                # Found another header, stop merging
+                break
+            
+            # Check distance threshold
+            DISTANCE_THRESHOLD = 200
+            if distance > DISTANCE_THRESHOLD:
+                break
+            
+            # Add this table to merge list
+            tables_to_merge.append(next_table)
+            last_merged_table = next_table
+            last_merged_page = next_page
+            last_merged_bottom = next_bbox[3]
+        
+        # Now merge all collected tables
+        if len(tables_to_merge) == 1:
+            # Only header, nothing to merge
+            merged_results.append(f)
+        else:
+            # Merge images and HTML
+            merged_images = []
+            merged_html_parts = []
+            
+            for t in tables_to_merge:
+                img_path = images_base_dir / t.get('img_path', '')
+                if img_path.exists():
+                    merged_images.append(Image.open(img_path))
                 
-                # Merge images
-                img1 = Image.open(images_base_dir / t['table']['img_path'])
-                img2 = Image.open(images_base_dir / t_next['table']['img_path'])
+                html = t.get('table_body', '')
+                # Remove table tags for concatenation
+                html = html.replace('<table>', '').replace('</table>', '')
+                merged_html_parts.append(html)
+            
+            # Combine images vertically
+            if merged_images:
+                max_width = max(img.width for img in merged_images)
+                total_height = sum(img.height for img in merged_images)
+                combined_img = Image.new('RGB', (max_width, total_height), 'white')
                 
-                max_w = max(img1.width, img2.width)
-                combined = Image.new('RGB', (max_w, img1.height + img2.height), 'white')
-                combined.paste(img1, (0, 0))
-                combined.paste(img2, (0, img1.height))
+                y_offset = 0
+                for img in merged_images:
+                    combined_img.paste(img, (0, y_offset))
+                    y_offset += img.height
                 
                 # Save merged image
-                merged_name = f"merged_{i}.jpg"
-                combined.save(images_base_dir / merged_name)
-                
-                # Create merged entry
-                merged_t = t.copy()
-                merged_t['table'] = t['table'].copy()
-                merged_t['table']['img_path'] = merged_name
-                merged_t['table']['table_body'] = t['table']['table_body'].replace('</table>', '') + t_next['table']['table_body'].replace('<table>', '')
-                merged_t['merged'] = True  # Flag for extraction to use image
-                
-                merged.append(merged_t)
-                skip_next = True
-                print(f"📎 Merged tables {i} and {i+1} (pages {t['table']['page_idx']} + {t_next['table']['page_idx']})")
-                continue
-        
-        merged.append(t)
+                merged_name = f"merged_{f['index']}.jpg"
+                combined_img.save(images_base_dir / merged_name)
+            else:
+                merged_name = header_table.get('img_path', '')
+            
+            # Combine HTML
+            merged_html = '<table>' + ''.join(merged_html_parts) + '</table>'
+            
+            # Create merged entry
+            merged_entry = f.copy()
+            merged_entry['table'] = header_table.copy()
+            merged_entry['table']['img_path'] = merged_name
+            merged_entry['table']['table_body'] = merged_html
+            merged_entry['merged'] = True
+            merged_entry['merged_count'] = len(tables_to_merge)
+            
+            merged_results.append(merged_entry)
+            
+            pages_merged = sorted(set(t.get('page_idx', 0) for t in tables_to_merge))
+            print(f"📎 Merged {len(tables_to_merge)} tables (pages {pages_merged})")
     
-    return merged
+    return merged_results
