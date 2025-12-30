@@ -45,7 +45,7 @@ The pipeline will:
 
 ## Example
 
-**Input:** [GTT Communications DEF 14A 2018](https://www.sec.gov/Archives/edgar/data/1315255/0001398344-18-006199-index.html)
+**Input:** [GTT Communications DEF 14A 2018](https://www.sec.gov/Archives/edgar/data/16732/0001206774-19-003416-index.html)
 
 **Extracted Table:**
 
