@@ -1,0 +1,105 @@
+import subprocess
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
+import threading
+
+
+def is_mineru_processed(output_dir: Path) -> bool:
+    """Check if MinerU has already processed this document."""
+    content_files = list(output_dir.rglob("*_content_list.json"))
+    return len(content_files) > 0
+
+
+def process_pdf(pdf_path, semaphore: threading.Semaphore):
+    """Process single PDF with MinerU.
+    
+    Args:
+        pdf_path: Path to PDF file
+        semaphore: Semaphore to limit concurrent requests
+    
+    Returns:
+        tuple: (status, name, error_msg)
+    """
+    output_dir = Path(f"output/{pdf_path.stem}")
+    
+    if is_mineru_processed(output_dir):
+        return 'skipped', pdf_path.name, None
+    
+    # Acquire semaphore before making request
+    with semaphore:
+        cmd = [
+            "mineru",
+            "-p", str(pdf_path),
+            "-o", str(output_dir),
+            "-b", "vlm-http-client",
+            "-u", "http://localhost:30000"
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            return 'failed', pdf_path.name, result.stderr[:200] if result.stderr else "Unknown error"
+        return 'success', pdf_path.name, None
+
+
+def process_pdfs_with_mineru(max_concurrent: int = 4):
+    """Process all PDFs in pdfs/ folder with MinerU.
+    
+    Args:
+        max_concurrent: Maximum number of concurrent MinerU processes
+    """
+    pdf_files = list(Path("pdfs").glob("*.pdf"))
+    
+    # Check which files need processing
+    to_process = []
+    skipped = []
+    for pdf in pdf_files:
+        output_dir = Path(f"output/{pdf.stem}")
+        if is_mineru_processed(output_dir):
+            skipped.append(pdf.name)
+        else:
+            to_process.append(pdf)
+    
+    print(f"Found {len(pdf_files)} PDFs total")
+    print(f"  - Already processed (skipped): {len(skipped)}")
+    print(f"  - To process: {len(to_process)}")
+    
+    if not to_process:
+        print("Nothing to process!")
+        return [], []
+    
+    print(f"\nProcessing {len(to_process)} PDFs (max {max_concurrent} concurrent)")
+
+    # Semaphore limits concurrent MinerU processes
+    semaphore = threading.Semaphore(max_concurrent)
+    
+    failed = []
+    success = []
+    
+    # Use more workers than semaphore allows - they'll queue up waiting for semaphore
+    with ThreadPoolExecutor(max_workers=len(to_process)) as executor:
+        futures = {
+            executor.submit(process_pdf, pdf, semaphore): pdf 
+            for pdf in to_process
+        }
+        
+        for future in tqdm(as_completed(futures), total=len(to_process)):
+            status, name, error = future.result()
+            if status == 'failed':
+                failed.append((name, error))
+            elif status == 'success':
+                success.append(name)
+    
+    print(f"\n=== Processing Complete ===")
+    print(f"Success: {len(success)}")
+    print(f"Failed: {len(failed)}")
+    
+    if failed:
+        print(f"\n❌ Failed documents:")
+        for name, error in failed:
+            print(f"  - {name}")
+            if error:
+                print(f"    Error: {error[:100]}...")
+    
+    return failed, success
