@@ -1,4 +1,4 @@
-# execcomp-ai
+# Execcomp-AI
 
 AI-powered pipeline to extract executive compensation data from SEC DEF 14A proxy statements.
 
