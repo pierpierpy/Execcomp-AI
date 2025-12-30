@@ -1,0 +1,51 @@
+{
+  "timestamp": "2025-12-30T19:42:30.990043",
+  "total_tables_found": 1,
+  "metadata": {
+    "_id": "948844_DEF 14A_2006_0000950136-06-002720",
+    "cik": "948844",
+    "company": "PROLIANCE INTERNATIONAL, INC.",
+    "filing_type": "DEF 14A",
+    "filing_date": "2006-04-05T00:00:00",
+    "period_of_report": "2006-05-04T00:00:00",
+    "sic": "3714",
+    "state_of_inc": "DE",
+    "state_location": "CT",
+    "fiscal_year_end": "1231",
+    "filing_html_index": "https://www.sec.gov/Archives/edgar/data/948844/0000950136-06-002720-index.html",
+    "htm_filing_link": "https://www.sec.gov/Archives/edgar/data/948844/000095013606002720/file001.htm",
+    "complete_text_filing_link": "https://www.sec.gov/Archives/edgar/data/948844/0000950136-06-002720.txt",
+    "filename": "948844_DEF 14A_2006_0000950136-06-002720.htm",
+    "accession_number": "0000950136-06-002720",
+    "year": 2006
+  },
+  "tables": [
+    {
+      "index": 9,
+      "table": {
+        "type": "table",
+        "img_path": "images/8894d5aa8e55a0970b1febc8ecf1f550431c12dfe0c926bb027642708146eff6.jpg",
+        "table_caption": [
+          "TABLEI SUMMARY COMPENSATION TABLE "
+        ],
+        "table_footnote": [],
+        "table_body": "<table><tr><td rowspan=\"2\">Name and Principal Position</td><td rowspan=\"2\">Year</td><td colspan=\"3\">Annual Compensation</td><td colspan=\"2\">Long-Term Compensation Awards</td></tr><tr><td>Salary ($)</td><td>Bonus ($)</td><td>Other Annual Comp. (a) ($)</td><td>Securities Underlying Options/ SARs (#)</td><td>All Other Comp. ($) (b)</td></tr><tr><td>Charles E. Johnson</td><td>2005</td><td>$437,500</td><td>$231,000</td><td>$0</td><td>0</td><td>$8,051</td></tr><tr><td rowspan=\"2\">President and Chief Executive Officer</td><td>2004</td><td>411,154</td><td>398,000</td><td>0</td><td>20,000</td><td>5,425</td></tr><tr><td>2003</td><td>391,890</td><td>0</td><td>0</td><td>0</td><td>9,817</td></tr><tr><td>Richard A. Wisot</td><td>2005</td><td>216,846</td><td>55,000</td><td>0</td><td>0</td><td>6,892</td></tr><tr><td>Vice President, Treasurer,</td><td>2004</td><td>206,192</td><td>110,000</td><td>0</td><td>0</td><td>5,123</td></tr><tr><td>Secretary and Chief Financial Officer</td><td>2003</td><td>205,255</td><td>0</td><td>0</td><td>0</td><td>6,323</td></tr><tr><td>David J. Albert</td><td>2005</td><td>257,539</td><td>91,000</td><td>4,799(c)</td><td>0</td><td>7,016</td></tr><tr><td rowspan=\"2\">Executive Vice President - Operations</td><td>2004</td><td>234,331</td><td>140,000</td><td>24,454(c)</td><td>10,000</td><td>4,166</td></tr><tr><td>2003</td><td>234,998</td><td>0</td><td>7,157(c)</td><td>0</td><td>3,390</td></tr><tr><td>Jeffrey L. Jackson</td><td>2005</td><td>179,231</td><td>42,000</td><td>0</td><td>0</td><td>4,467</td></tr><tr><td rowspan=\"2\">Vice President - Human Resources and Process</td><td>2004</td><td>168,077</td><td>87,000</td><td>0</td><td>7,000</td><td>3,626</td></tr><tr><td>2003</td><td>166,546</td><td>0</td><td>0</td><td>0</td><td>3,354</td></tr><tr><td>Kenneth T. Flynn, Jr</td><td>2005</td><td>149,692</td><td>28,000</td><td>0</td><td>0</td><td>4,949</td></tr><tr><td>Vice President and</td><td>2004</td><td>143,285</td><td>80,000</td><td>0</td><td>0</td><td>4,191</td></tr></table>",
+        "bbox": [
+          18,
+          619,
+          578,
+          988
+        ],
+        "page_idx": 9,
+        "source_doc": "948844_2006_0000950136-06-002720"
+      },
+      "classification": {
+        "table_type": "summary_compensation",
+        "confidence": 0.99,
+        "reason": "Table is titled 'SUMMARY COMPENSATION TABLE', shows multiple executives with Salary, Bonus, and Total compensation (via sum of components) across multiple years. Has header row with column labels.",
+        "is_header_only": false,
+        "has_header": true
+      }
+    }
+  ]
+}

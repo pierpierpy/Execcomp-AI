@@ -1,0 +1,54 @@
+{
+  "timestamp": "2025-12-30T19:21:44.943732",
+  "total_tables_found": 1,
+  "metadata": {
+    "_id": "1315255_DEF 14A_2018_0001398344-18-006199",
+    "cik": "1315255",
+    "company": "GTT Communications, Inc.",
+    "filing_type": "DEF 14A",
+    "filing_date": "2018-04-30T00:00:00",
+    "period_of_report": "2018-05-30T00:00:00",
+    "sic": "4813",
+    "state_of_inc": "DE",
+    "state_location": "VA",
+    "fiscal_year_end": "1231",
+    "filing_html_index": "https://www.sec.gov/Archives/edgar/data/1315255/0001398344-18-006199-index.html",
+    "htm_filing_link": "https://www.sec.gov/Archives/edgar/data/1315255/000139834418006199/fp0032815_def14a.htm",
+    "complete_text_filing_link": "https://www.sec.gov/Archives/edgar/data/1315255/0001398344-18-006199.txt",
+    "filename": "1315255_DEF 14A_2018_0001398344-18-006199.htm",
+    "accession_number": "0001398344-18-006199",
+    "year": 2018
+  },
+  "tables": [
+    {
+      "index": 9,
+      "table": {
+        "type": "table",
+        "img_path": "images/a7e85a33204e3eaef86a1b401f4a007862137f19e8d32eb7fd49bba1fcddd2a4.jpg",
+        "table_caption": [],
+        "table_footnote": [
+          "(1) Amount reflects the aggregate grant date fair value of stock and option awards, computed in accordance with FASB ASC Topic 718. See Note 11 of the \"Notes to Consolidated Financial Statements \u2014 Share-Based Compensation\" in our Annual Report on Form 10-K for the year ending December 31, 2017 for a discussion of assumptions made in determining the value of our stock and option awards. For the November 2017 longer-term performance based awards the value is based on the probable outcome of the performance conditions as anticipated during the 4 year performance period. ",
+          "(2) Represents annual cash incentive compensation under our annual cash incentive programs for the years indicated. See \"Annual Incentives (Cash Incentive Payments)\" above for additional details on payments made under the 2017 annual cash incentive program. ",
+          "(3) Represents employer contributions to our 401(k) plan paid on behalf of the executives, which are provided on a nondiscriminatory basis to all U.S. employees. ",
+          "(4) Mr. Sicoli joined the Company on April 13, 2015. His annualized base salary for 2015 was $310,000. "
+        ],
+        "table_body": "<table><tr><td>Name and Principal Position</td><td>Year</td><td>Salary ($)</td><td>Stock Awards (1) ($)</td><td>Option Awards (1) ($)</td><td>Non-Equity Incentive Plan Compensation (2)</td><td>All Other Compensation(3) ($)</td><td>Total ($)</td></tr><tr><td>H. Brian Thompson,</td><td>2017</td><td>250,000</td><td>350,017</td><td>\u2014</td><td>\u2014</td><td>\u2014</td><td>600,017</td></tr><tr><td>Executive Chairman</td><td>2016</td><td>225,000</td><td>250,002</td><td>\u2014</td><td>\u2014</td><td>\u2014</td><td>475,002</td></tr><tr><td></td><td>2015</td><td>187,500</td><td>150,023</td><td>\u2014</td><td>\u2014</td><td>\u2014</td><td>337,523</td></tr><tr><td>Richard D. Calder, Jr.,</td><td>2017</td><td>525,000</td><td>7,184,996</td><td>\u2014</td><td>520,013</td><td>12,000</td><td>8,242,009</td></tr><tr><td>Chief Executive Officer</td><td>2016</td><td>495,000</td><td>756,242</td><td>165,659</td><td>512,321</td><td>12,000</td><td>1,941,222</td></tr><tr><td>and President</td><td>2015</td><td>450,000</td><td>4,632,410</td><td>279,750</td><td>658,350</td><td>12,000</td><td>6,032,510</td></tr><tr><td>Chris McKee,</td><td>2017</td><td>350,000</td><td>4,554,321</td><td>\u2014</td><td>247,625</td><td>9,000</td><td>5,160,946</td></tr><tr><td>General Counsel, Executive</td><td>2016</td><td>340,000</td><td>359,214</td><td>78,687</td><td>218,398</td><td>9,000</td><td>1,005,299</td></tr><tr><td>Vice President and Secretary</td><td>2015</td><td>310,000</td><td>2,756,937</td><td>125,885</td><td>277,970</td><td>9,000</td><td>3,479,792</td></tr><tr><td>Michael Sicoli,</td><td>2017</td><td>350,000</td><td>4,268,932</td><td>\u2014</td><td>227,815</td><td>9,000</td><td>4,855,747</td></tr><tr><td>Chief Financial Officer</td><td>2016</td><td>340,000</td><td>359,214</td><td>78,687</td><td>216,298</td><td>9,000</td><td>1,003,199</td></tr><tr><td></td><td>2015(4)</td><td>223,160</td><td>3,509,450</td><td>170,095</td><td>207,053</td><td>5,813</td><td>4,115,570</td></tr></table>",
+        "bbox": [
+          18,
+          86,
+          976,
+          336
+        ],
+        "page_idx": 32,
+        "source_doc": "1315255_2018_0001398344-18-006199"
+      },
+      "classification": {
+        "table_type": "summary_compensation",
+        "confidence": 0.99,
+        "reason": "Contains multiple executives with actual dollar amounts for Salary, Stock/Option Awards, and Total across multiple years. First row is column headers, and data rows follow. Matches SEC's required Summary Compensation Table format.",
+        "is_header_only": false,
+        "has_header": true
+      }
+    }
+  ]
+}
