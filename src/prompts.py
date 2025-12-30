@@ -45,15 +45,21 @@ CLASSIFICATION_PROMPT = """Classify this table from an SEC DEF 14A proxy stateme
 - MUST show actual compensation, not percentages or hypotheticals
 - Tables showing ONLY percentages or ONLY one component (just bonus, just salary) are compensation_analysis, NOT summary_compensation
 
-## Header-only detection:
-Determine if the table contains ONLY headers (column names like "Name", "Salary", "Bonus", "Year", "Stock Awards", "Total", etc.) WITHOUT actual executive compensation data rows with dollar amounts.
-- If the table has column headers but NO data rows with executive names and dollar values → is_header_only = True
-- If the table has actual executive names and compensation numbers → is_header_only = False
+## has_header detection (LOOK AT THE IMAGE ONLY):
 
-## Has header detection:
-Determine if the table contains a header row (column names at the top).
-- If the table starts with a row containing column names (Name, Salary, Bonus, Year, Total, etc.) → has_header = True
-- If the table is a continuation of data without column names at the top → has_header = False
+**has_header = True**: The FIRST ROW of the table shows COLUMN LABELS like "Name", "Year", "Salary", "Bonus", "Stock Awards", "Total", etc. These are TEXT LABELS describing what each column contains.
+
+**has_header = False**: The FIRST ROW of the table shows ACTUAL DATA - a person's name (e.g., "Gary A. Stewart", "John Smith"), years (2004, 2003), dollar amounts ($132,500, $10,000). NO column labels are visible.
+
+ASK YOURSELF: What is in the FIRST ROW of this table?
+- If FIRST ROW = column labels like "Name | Year | Salary | Bonus" → has_header = True  
+- If FIRST ROW = data like "Gary A. Stewart | 2004 | $132,500" → has_header = False
+
+DO NOT assume a header exists just because the table has columns. ONLY set has_header=True if you can literally SEE the header row with column names in the image.
+
+## is_header_only detection:
+- **is_header_only = True**: The table contains ONLY the header row with column names, with NO data rows below
+- **is_header_only = False**: The table contains data rows with names and numbers
 
 ## Table to classify:
 
