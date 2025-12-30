@@ -49,23 +49,22 @@ The pipeline will:
 
 **Extracted Table:**
 
-![Sample Table](docs/sample_table.jpg)
+![Sample Table](docs/image.jpg)
 
 **Output JSON:**
 ```json
 {
-  "company": "GTT Communications, Inc.",
-  "executives": [
-    {
-      "name": "Richard D. Calder, Jr.",
-      "title": "CEO and President",
-      "fiscal_year": 2017,
-      "salary": 525000,
-      "bonus": 0,
-      "stock_awards": 7184996,
-      "total": 8242009
-    }
-  ]
+    "name": "Luca Mignini",
+    "title": "Former Executive Vice President - Strategic Initiatives",
+    "fiscal_year": 2018,
+    "salary": 747433,
+    "bonus": 50000,
+    "stock_awards": 1731729,
+    "option_awards": 363899,
+    "non_equity_incentive": 0,
+    "change_in_pension": 0,
+    "other_compensation": 228655,
+    "total": 3121716
 }
 ```
 
