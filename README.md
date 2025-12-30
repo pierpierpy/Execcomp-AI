@@ -108,3 +108,12 @@ MODEL = "gpt-4o"  # or any vision model
 ```
 
 Only **MinerU** requires local GPU for PDF table extraction. Everything else works with cloud APIs.
+
+
+## 🚧 Work in Progress
+
+The pipeline is currently running on the largest possible set of SEC filings. In the meantime, you can explore some initial samples here:
+
+👉 **[pierjoe/execcomp-ai-sample](https://huggingface.co/datasets/pierjoe/execcomp-ai-sample)**
+
+> ⚠️ **Note:** These are early samples and may contain errors due to bugs that are being fixed. The final dataset will be more accurate.
