@@ -3,6 +3,7 @@
 AI-powered pipeline to extract executive compensation data from SEC DEF 14A proxy statements.
 
 ## Overview
+![Schema](docs/schema.png)
 
 Extracts **Summary Compensation Tables** from 100K+ SEC filings (2005-present) using:
 - **MinerU** for PDF table extraction (images + HTML)
