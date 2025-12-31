@@ -208,14 +208,51 @@ async def main():
     for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Processing"):
         await coro
     
+    # Count totals in output folder
+    total_docs = 0
+    total_funds = 0
+    total_with_sct = 0
+    total_no_sct = 0
+    total_tables = 0
+    
+    for d in OUTPUT_PATH.iterdir():
+        if not d.is_dir():
+            continue
+        total_docs += 1
+        
+        # Check if fund
+        meta_path = d / "metadata.json"
+        if meta_path.exists():
+            with open(meta_path) as f:
+                meta = json.load(f)
+            if meta.get("sic") in ("NULL", None):
+                total_funds += 1
+                continue  # Funds don't count for SCT stats
+        
+        # Count SCT status (only for non-funds)
+        if (d / "extraction_results.json").exists():
+            total_with_sct += 1
+            # Count tables in this doc
+            class_path = d / "classification_results.json"
+            if class_path.exists():
+                with open(class_path) as f:
+                    classification = json.load(f)
+                total_tables += len(classification.get("tables", []))
+        elif (d / "no_sct_found.json").exists():
+            total_no_sct += 1
+    
+    duplicates = total_tables - total_with_sct  # Docs with multiple tables
+    
     # Print summary
     print("\n" + "="*60)
     print("PIPELINE COMPLETE")
     print("="*60)
-    print(f"Processed:      {stats['processed']}")
-    print(f"No SCT found:   {stats['no_tables']}")
-    print(f"Skipped (fund): {stats['skipped_fund']}")
-    print(f"Skipped (done): {stats['skipped_done']}")
+    print(f"Processed:      {stats['processed']} (this run)")
+    print(f"Total docs:     {total_docs} (in output)")
+    print(f"  Funds:        {total_funds}")
+    print(f"  Non-funds:    {total_docs - total_funds}")
+    print(f"    With SCT:   {total_with_sct} ({total_tables} tables, {duplicates} extra)")
+    print(f"    No SCT:     {total_no_sct}")
     print(f"Errors:         {stats['errors']}")
     print("="*60)
 

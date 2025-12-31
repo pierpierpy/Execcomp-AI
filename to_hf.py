@@ -3,17 +3,16 @@
 Upload Executive Compensation dataset to HuggingFace Hub.
 
 Usage:
-    python to_hf.py                          # Save locally only
-    python to_hf.py --push                   # Save locally and push to HF Hub
-    python to_hf.py --push --repo USER/REPO  # Push to custom repo
+    python to_hf.py         # Save locally only
+    python to_hf.py --push  # Save locally and push to HF Hub
 """
 
 import argparse
 import json
 from pathlib import Path
+from collections import Counter
 
 from datasets import Dataset, Image as HFImage
-from huggingface_hub import HfApi
 
 
 # =============================================================================
@@ -23,7 +22,7 @@ from huggingface_hub import HfApi
 BASE_PATH = Path(__file__).parent.resolve()
 OUTPUT_PATH = BASE_PATH / "output"
 HF_LOCAL_PATH = BASE_PATH / "hf/execcomp-ai-sample"
-DEFAULT_REPO = "pierjoe/execcomp-ai-sample"
+HF_REPO = "pierjoe/execcomp-ai-sample"
 
 
 def build_dataset(output_path: Path) -> list[dict]:
@@ -101,7 +100,6 @@ def build_dataset(output_path: Path) -> list[dict]:
 def main():
     parser = argparse.ArgumentParser(description="Upload dataset to HuggingFace Hub")
     parser.add_argument("--push", action="store_true", help="Push to HuggingFace Hub")
-    parser.add_argument("--repo", type=str, default=DEFAULT_REPO, help=f"HF repo name (default: {DEFAULT_REPO})")
     args = parser.parse_args()
 
     print("="*60)
@@ -117,6 +115,22 @@ def main():
         print("✗ No records found. Run the pipeline first.")
         return
 
+    # Show duplicates analysis
+    keys = [(r["cik"], r["year"]) for r in records]
+    counts = Counter(keys)
+    duplicates = {k: v for k, v in counts.items() if v > 1}
+    
+    print(f"\n📊 Dataset Statistics:")
+    print(f"   Total records: {len(records)}")
+    print(f"   Unique (cik, year): {len(counts)}")
+    print(f"   With duplicates: {len(duplicates)}")
+    
+    if duplicates:
+        print(f"\n⚠️  Duplicates (same cik+year, multiple tables):")
+        for (cik, year), count in sorted(duplicates.items(), key=lambda x: -x[1]):
+            company = next((r["company"] for r in records if r["cik"] == cik and r["year"] == year), "Unknown")
+            print(f"   CIK {cik}, Year {year}: {count} tables - {company}")
+
     # Create HF dataset
     print("\n[2/3] Creating HuggingFace dataset...")
     hf_dataset = Dataset.from_list(records)
@@ -131,9 +145,9 @@ def main():
 
     # Push to Hub
     if args.push:
-        print(f"\n[PUSH] Uploading to {args.repo}...")
-        hf_dataset.push_to_hub(args.repo)
-        print(f"✓ Pushed to https://huggingface.co/datasets/{args.repo}")
+        print(f"\n[PUSH] Uploading to {HF_REPO}...")
+        hf_dataset.push_to_hub(HF_REPO)
+        print(f"✓ Pushed to https://huggingface.co/datasets/{HF_REPO}")
 
     print("\n" + "="*60)
     print("COMPLETE")
