@@ -1,3 +1,4 @@
+import asyncio
 import base64
 from pathlib import Path
 from typing import Optional
@@ -12,6 +13,7 @@ from .schemas import TableType, TableClassification
 CLASSIFY_MAX_TOKENS = 2000
 CLASSIFY_TEMPERATURE = 0.0
 TABLE_BODY_TRUNCATE = 2000  # Max chars to send for classification
+CLASSIFY_MAX_CONCURRENT = 8  # Max concurrent classification requests
 
 
 def load_image_b64(img_path: Path) -> Optional[str]:
@@ -110,21 +112,33 @@ async def find_summary_compensation_in_doc(
     found = []
     all_classifications = {}  # Store ALL classifications
     
+    # MinerU crea output/doc_source/doc_source/vlm/
+    images_dir = base_path / f"output/{doc_source}/{doc_source}/vlm/"
+    
+    # Semaphore to limit concurrent requests
+    semaphore = asyncio.Semaphore(CLASSIFY_MAX_CONCURRENT)
+    
+    async def classify_with_semaphore(i: int, t: dict):
+        async with semaphore:
+            try:
+                result = await classify_table(t, images_dir, client, model)
+                return (i, t, result, None)
+            except Exception as e:
+                return (i, t, None, e)
+    
+    # Launch all classifications in parallel
+    tasks = [classify_with_semaphore(i, t) for i, t in enumerate(doc_tables)]
+    
     # Yellow progress bar for classification
-    pbar = tqdm(enumerate(doc_tables), total=len(doc_tables), desc="Classificazione", 
+    pbar = tqdm(asyncio.as_completed(tasks), total=len(doc_tables), desc="Classificazione", 
                 bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}', colour='yellow')
     
-    for i, t in pbar:
-        # MinerU crea output/doc_source/doc_source/vlm/
-        images_dir = base_path / f"output/{doc_source}/{doc_source}/vlm/"
-        img_path = images_dir / t.get('img_path', '')
+    for coro in pbar:
+        i, t, result, error = await coro
         
-        # Classify
-        try:
-            result = await classify_table(t, images_dir, client, model)
-        except Exception as e:
+        if error:
             if debug:
-                print(f"Error on table {i}: {e}")
+                print(f"Error on table {i}: {error}")
             continue
         
         # Store classification for ALL tables (not just summary_compensation)

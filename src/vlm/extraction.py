@@ -1,5 +1,6 @@
 # Estrazione strutturata di dati da tabelle Summary Compensation
 
+import asyncio
 import base64
 from pathlib import Path
 from typing import Optional, List
@@ -11,6 +12,7 @@ from .schemas import Executive, SummaryCompensationTable
 # ============== CONFIGURATION ==============
 EXTRACT_MAX_TOKENS = 8000
 EXTRACT_TEMPERATURE = 0.0
+EXTRACT_MAX_CONCURRENT = 4  # Max concurrent extraction requests
 
 
 def load_image_b64(img_path: Path) -> Optional[str]:
@@ -98,35 +100,42 @@ async def extract_all_summary_compensation(
         Lista di SummaryCompensationTable estratte
     """
     
-    results = []
-    
     company = metadata.get('company', '') if metadata else ''
     cik = str(metadata.get('cik', '')) if metadata else ''
     filing_year = str(metadata.get('year', '')) if metadata else ''
     fiscal_year_end = metadata.get('fiscal_year_end', '') if metadata else ''
     
-    for item in found_tables:
-        table = item['table']
-        doc_source = table.get('source_doc', '')
-        images_dir = base_path / f"output/{doc_source}/{doc_source}/vlm/"
-        is_merged = item.get('merged', False)
-        
-        try:
-            extracted = await extract_summary_compensation_table(
-                table=table,
-                images_base_dir=images_dir,
-                client=client,
-                model=model,
-                company=company,
-                cik=cik,
-                filing_year=filing_year,
-                fiscal_year_end=fiscal_year_end,
-                is_merged=is_merged
-            )
-            results.append(extracted)
-            merged_tag = " [MERGED]" if is_merged else ""
-            print(f"✓ Extracted table {item['index']}{merged_tag}: {len(extracted.executives)} executives")
-        except Exception as e:
-            print(f"✗ Error extracting table {item['index']}: {e}")
+    # Semaphore to limit concurrent requests
+    semaphore = asyncio.Semaphore(EXTRACT_MAX_CONCURRENT)
     
-    return results
+    async def extract_with_semaphore(item: dict):
+        async with semaphore:
+            table = item['table']
+            doc_source = table.get('source_doc', '')
+            images_dir = base_path / f"output/{doc_source}/{doc_source}/vlm/"
+            is_merged = item.get('merged', False)
+            
+            try:
+                extracted = await extract_summary_compensation_table(
+                    table=table,
+                    images_base_dir=images_dir,
+                    client=client,
+                    model=model,
+                    company=company,
+                    cik=cik,
+                    filing_year=filing_year,
+                    fiscal_year_end=fiscal_year_end,
+                    is_merged=is_merged
+                )
+                merged_tag = " [MERGED]" if is_merged else ""
+                print(f"✓ Extracted table {item['index']}{merged_tag}: {len(extracted.executives)} executives")
+                return extracted
+            except Exception as e:
+                print(f"✗ Error extracting table {item['index']}: {e}")
+                return None
+    
+    # Launch all extractions in parallel
+    results = await asyncio.gather(*[extract_with_semaphore(item) for item in found_tables])
+    
+    # Filter out None results (errors)
+    return [r for r in results if r is not None]

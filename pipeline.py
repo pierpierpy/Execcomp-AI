@@ -28,6 +28,7 @@ VLM_BASE_URL = "http://localhost:8000/v1"
 VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
 
 MINERU_MAX_CONCURRENT = 16
+DOC_MAX_CONCURRENT = 4  # Max concurrent document processing (classification + extraction)
 
 # =============================================================================
 # PATHS
@@ -122,65 +123,85 @@ async def main():
     doc_sources = list(set(t.get('source_doc') for t in all_tables))
     
     stats = {"processed": 0, "skipped_fund": 0, "skipped_done": 0, "no_tables": 0, "errors": 0}
+    stats_lock = asyncio.Lock()
     
-    for source_doc in tqdm(doc_sources, desc="Processing"):
+    # Semaphore to limit concurrent document processing
+    doc_semaphore = asyncio.Semaphore(DOC_MAX_CONCURRENT)
+    
+    async def process_document(source_doc: str):
+        """Process a single document: classify tables, merge, extract data."""
         # Load metadata
         metadata_path = OUTPUT_PATH / source_doc / "metadata.json"
         if not metadata_path.exists():
-            continue
+            return
         with open(metadata_path) as f:
             meta = json.load(f)
         
         # Skip funds (no SIC code)
         if meta.get("sic") in ("NULL", None):
-            stats["skipped_fund"] += 1
-            continue
+            async with stats_lock:
+                stats["skipped_fund"] += 1
+            return
         
         # Skip if already processed
         if (OUTPUT_PATH / source_doc / "extraction_results.json").exists():
-            stats["skipped_done"] += 1
-            continue
+            async with stats_lock:
+                stats["skipped_done"] += 1
+            return
         
         # Skip if already marked as no SCT (unless DONT_SKIP is True)
         if not DONT_SKIP and (OUTPUT_PATH / source_doc / "no_sct_found.json").exists():
-            stats["skipped_done"] += 1
-            continue
+            async with stats_lock:
+                stats["skipped_done"] += 1
+            return
 
-        try:
-            # Classify tables
-            found, all_classifications = await find_summary_compensation_in_doc(
-                doc_source=source_doc,
-                all_tables=all_tables,
-                client=client,
-                model=VLM_MODEL,
-                base_path=BASE_PATH,
-                debug=False
-            )
-            
-            if not found:
-                # Save marker indicating no SCT was found
-                save_no_sct_results(OUTPUT_PATH / source_doc, metadata=meta)
-            images_base_dir = OUTPUT_PATH / source_doc / source_doc / "vlm"
-            found = merge_consecutive_tables(found, images_base_dir, all_tables, all_classifications, debug=False)
-            
-            # Extract compensation data
-            extracted = await extract_all_summary_compensation(
-                found_tables=found,
-                all_tables=all_tables,
-                client=client,
-                model=VLM_MODEL,
-                base_path=BASE_PATH,
-                metadata=meta
-            )
-            
-            # Save results
-            save_classification_results(found, OUTPUT_PATH / source_doc, metadata=meta)
-            save_extraction_results(extracted, OUTPUT_PATH / source_doc, metadata=meta)
-            stats["processed"] += 1
-            
-        except Exception as e:
-            stats["errors"] += 1
-            tqdm.write(f"✗ Error {source_doc}: {e}")
+        async with doc_semaphore:
+            try:
+                # Classify tables
+                found, all_classifications = await find_summary_compensation_in_doc(
+                    doc_source=source_doc,
+                    all_tables=all_tables,
+                    client=client,
+                    model=VLM_MODEL,
+                    base_path=BASE_PATH,
+                    debug=False
+                )
+                
+                if not found:
+                    # Save marker indicating no SCT was found
+                    save_no_sct_results(OUTPUT_PATH / source_doc, metadata=meta)
+                    async with stats_lock:
+                        stats["no_tables"] += 1
+                    return
+                
+                images_base_dir = OUTPUT_PATH / source_doc / source_doc / "vlm"
+                found = merge_consecutive_tables(found, images_base_dir, all_tables, all_classifications, debug=False)
+                
+                # Extract compensation data
+                extracted = await extract_all_summary_compensation(
+                    found_tables=found,
+                    all_tables=all_tables,
+                    client=client,
+                    model=VLM_MODEL,
+                    base_path=BASE_PATH,
+                    metadata=meta
+                )
+                
+                # Save results
+                save_classification_results(found, OUTPUT_PATH / source_doc, metadata=meta)
+                save_extraction_results(extracted, OUTPUT_PATH / source_doc, metadata=meta)
+                async with stats_lock:
+                    stats["processed"] += 1
+                
+            except Exception as e:
+                async with stats_lock:
+                    stats["errors"] += 1
+                tqdm.write(f"✗ Error {source_doc}: {e}")
+    
+    # Process all documents concurrently with progress bar
+    tasks = [process_document(doc) for doc in doc_sources]
+    for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Processing"):
+        await coro
     
     # Print summary
     print("\n" + "="*60)
