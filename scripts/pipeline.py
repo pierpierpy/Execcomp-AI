@@ -41,7 +41,8 @@ DOC_MAX_CONCURRENT = 4  # Max concurrent document processing (classification + e
 BASE_PATH = Path(__file__).parent.parent.resolve()  # Go up from scripts/ to project root
 PDF_PATH = BASE_PATH / "pdfs"
 OUTPUT_PATH = BASE_PATH / "output"
-DATA_PATH = BASE_PATH / "data/DEF14A_all.jsonl"
+DATA_PATH = BASE_PATH / "data/DEF14A_all.jsonl"  # Local file (optional)
+HF_DATASET = "pierjoe/SEC-DEF14A-2005-2022"  # HuggingFace dataset
 
 # =============================================================================
 # MAIN PIPELINE
@@ -91,8 +92,13 @@ async def main():
     
     # Load dataset
     print("\n[1/6] Loading dataset...")
-    dataset = load_dataset("json", data_files=str(DATA_PATH))
-    all_docs = dataset["train"]
+    if DATA_PATH.exists():
+        dataset = load_dataset("json", data_files=str(DATA_PATH))
+        all_docs = dataset["train"]
+        print(f"✓ Loaded from local file: {DATA_PATH}")
+    else:
+        all_docs = load_dataset(HF_DATASET, split="train")
+        print(f"✓ Loaded from HuggingFace: {HF_DATASET}")
     
     random.seed(SEED)
     indices = random.sample(range(len(all_docs)), min(sample_size, len(all_docs)))
