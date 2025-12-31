@@ -18,6 +18,8 @@ from .processing import (
     process_pdfs_with_mineru,
     extract_tables_from_output,
     merge_consecutive_tables,
+    fix_orphan_images,
+    fix_all_orphan_images,
 )
 
 # IO - Results and visualization

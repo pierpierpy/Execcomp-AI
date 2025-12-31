@@ -1,3 +1,6 @@
+output_backup/*
+/home/pdipasquale/MIIA/stuff/output_backup/*
+test_orphan_fix/*
 debug/*
 all_tables.json
 hf/*
@@ -5,7 +8,7 @@ hf/*
 data/*
 pdfs/*
 output/*
-test/*
+.test/*
 .stuff/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -226,3 +229,7 @@ __marimo__/
 /pipeline.ipynb
 /HF.ipynb
 tests.ipynb
+output_backup/1000077_2006_0001193125-06-203842/metadata.json
+notebooks/test_orphan_images_fix.ipynb
+notebooks/test_orphan_images_fix.ipynb
+notebooks/test_orphan_images_fix.ipynb

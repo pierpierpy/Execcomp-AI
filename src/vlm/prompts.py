@@ -40,10 +40,18 @@ CLASSIFICATION_PROMPT = """Classify this table from an SEC DEF 14A proxy stateme
 10. **other** - Any other table
 
 ## Key rules for summary_compensation:
+- MUST have **executive names visible** (e.g., "John Smith, CEO", "Jane Doe, CFO") - if NO NAMES are visible, it is NOT summary_compensation
+- MUST have a **Year column** with fiscal years (e.g., 2019, 2020, 2021) as ROW VALUES, not as column headers
 - MUST have Salary AND Total columns with dollar amounts
 - MUST show multiple executives (CEO, CFO, etc.)
-- MUST show actual compensation, not percentages or hypotheticals
-- Tables showing ONLY percentages or ONLY one component (just bonus, just salary) are compensation_analysis, NOT summary_compensation
+- Uses **AGGREGATED categories**: Salary, Bonus, Stock Awards, Option Awards, Non-Equity Incentive, All Other Compensation, Total
+
+## Tables that are NOT summary_compensation (classify as "other"):
+- Tables where **years are column headers** (e.g., columns labeled "2018", "2017") instead of row values → these are breakdown/summary tables → **other**
+- Tables WITHOUT executive names visible → **other**
+- Tables showing ONLY percentages or ONLY one component → compensation_analysis
+- Tables with **detailed breakdowns** like Medical, Dental, Vision, Insurance, 401k, Perks → **other**
+- Tables titled "Potential Payments", "Estimated Payments", "Termination" → termination_payments
 
 ## has_header detection (LOOK AT THE IMAGE ONLY):
 
