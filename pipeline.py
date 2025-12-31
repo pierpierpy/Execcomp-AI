@@ -14,7 +14,6 @@ import sys
 from pathlib import Path
 
 # per vedere quali sono state mergiate
-# grep -r '"merged": true' /home/pdipasquale/MIIA/stuff/output/ --include="*.json" -l
 
 # i documenti possono essere di 3 tipi
 # possono essere fondi -> non hanno SCT
