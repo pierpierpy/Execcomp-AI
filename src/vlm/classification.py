@@ -88,6 +88,7 @@ async def find_summary_compensation_in_doc(
         - found: list of summary_compensation tables
         - all_classifications: dict mapping (page_idx, bbox) -> classification for ALL tables
     """
+    from tqdm.auto import tqdm
     
     # Filtra tabelle di questo documento
     doc_tables = [t for t in all_tables if t.get('source_doc') == doc_source]
@@ -109,7 +110,11 @@ async def find_summary_compensation_in_doc(
     found = []
     all_classifications = {}  # Store ALL classifications
     
-    for i, t in enumerate(doc_tables):
+    # Yellow progress bar for classification
+    pbar = tqdm(enumerate(doc_tables), total=len(doc_tables), desc="Classificazione", 
+                bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}', colour='yellow')
+    
+    for i, t in pbar:
         # MinerU crea output/doc_source/doc_source/vlm/
         images_dir = base_path / f"output/{doc_source}/{doc_source}/vlm/"
         img_path = images_dir / t.get('img_path', '')

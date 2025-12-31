@@ -6,68 +6,72 @@ CLASSIFICATION_PROMPT = """Classify this table from an SEC DEF 14A proxy stateme
 
 ## Table Types:
 
-1. **summary_compensation** - THE OFFICIAL "Summary Compensation Table" with these REQUIRED columns:
-   - Name and Principal Position
-   - Year
-   - Salary (dollar amount)
-   - Bonus (dollar amount)  
-   - Stock Awards and/or Option Awards (dollar amounts)
-   - Total (dollar amount)
-   Must show MULTIPLE executives with ACTUAL DOLLAR AMOUNTS paid across MULTIPLE YEARS.
-   This is THE main compensation table in the proxy, usually titled "Summary Compensation Table".
+1. **summary_compensation** - THE OFFICIAL "Summary Compensation Table" (SEC Item 402(c)):
+   - REQUIRED: **Year column with MULTIPLE YEARS as ROW VALUES** (e.g., rows showing 2020, 2021, 2022)
+   - REQUIRED: Executive names visible with titles (CEO, CFO, etc.)
+   - REQUIRED: Standard columns - Name, Year, Salary, Bonus, Stock Awards, Option Awards, Total
+   - Shows SAME executives repeated across MULTIPLE fiscal years (one row per executive per year)
+   - Usually titled "Summary Compensation Table"
+   
+   ⚠️ **CRITICAL DISTINCTION**: The Year must be a COLUMN with values IN THE ROWS.
+   If years appear as COLUMN HEADERS (e.g., "2018 | 2017 | 2016" across the top) → NOT summary_compensation
 
-2. **compensation_analysis** - Supporting tables that show percentages, ratios, or partial compensation data. Examples:
-   - "Base Salary as Percentage of Total Compensation"
-   - "Bonus as Percentage of Total"
-   - Pay mix charts or breakdowns
-   - Single metric tables (only bonus amounts, only salary, etc.)
-   These are NOT the main Summary Compensation Table.
+2. **compensation_analysis** - Supporting tables that are NOT the official SCT:
+   - Tables with **years as COLUMN HEADERS** instead of row values (e.g., columns labeled "2018", "2017")
+   - Single-year summaries without Year column
+   - Percentage breakdowns ("% of Total Compensation")
+   - Alternative formats showing compensation data differently
+   - Pay mix analysis tables
+   - Tables comparing executives side-by-side with years as columns
 
-3. **director_compensation** - Board director fees (not executives)
+3. **director_compensation** - Board director fees (not executives), SEC Item 402(k)
 
-4. **grants_plan_based_awards** - Stock/option grants with grant dates
+4. **grants_plan_based_awards** - Stock/option grants with grant dates, SEC Item 402(d)
 
-5. **outstanding_equity** - Unvested stock/unexercised options at year end
+5. **outstanding_equity** - Unvested stock/unexercised options at year end, SEC Item 402(f)
 
-6. **option_exercises** - Options exercised or stock vested during year
+6. **option_exercises** - Options exercised or stock vested during year, SEC Item 402(g)
 
-7. **beneficial_ownership** - Shares owned by executives/directors/5%+ holders
+7. **beneficial_ownership** - Shares owned by executives/directors/5%+ holders, SEC Item 403
 
-8. **termination_payments** - Hypothetical payments upon termination/change in control
+8. **termination_payments** - Hypothetical payments upon termination/change in control, SEC Item 402(j)
 
-9. **pension_benefits** - Pension values, deferred compensation
+9. **pension_benefits** - Pension values, deferred compensation, SEC Item 402(h)
 
-10. **other** - Any other table
+10. **other** - Any table that doesn't fit above categories
 
-## Key rules for summary_compensation:
-- MUST have **executive names visible** (e.g., "John Smith, CEO", "Jane Doe, CFO") - if NO NAMES are visible, it is NOT summary_compensation
-- MUST have a **Year column** with fiscal years (e.g., 2019, 2020, 2021) as ROW VALUES, not as column headers
-- MUST have Salary AND Total columns with dollar amounts
-- MUST show multiple executives (CEO, CFO, etc.)
-- Uses **AGGREGATED categories**: Salary, Bonus, Stock Awards, Option Awards, Non-Equity Incentive, All Other Compensation, Total
+## KEY RULE - Year Format Detection:
 
-## Tables that are NOT summary_compensation (classify as "other"):
-- Tables where **years are column headers** (e.g., columns labeled "2018", "2017") instead of row values → these are breakdown/summary tables → **other**
-- Tables WITHOUT executive names visible → **other**
-- Tables showing ONLY percentages or ONLY one component → compensation_analysis
-- Tables with **detailed breakdowns** like Medical, Dental, Vision, Insurance, 401k, Perks → **other**
-- Tables titled "Potential Payments", "Estimated Payments", "Termination" → termination_payments
+**summary_compensation** (EXTRACT THIS):
+```
+Name          | Year | Salary   | Bonus    | Total
+John Smith    | 2022 | $500,000 | $100,000 | $1,200,000
+John Smith    | 2021 | $480,000 | $90,000  | $1,100,000
+Jane Doe      | 2022 | $400,000 | $80,000  | $950,000
+```
+↑ Year is a COLUMN, values are IN THE ROWS, same exec appears multiple times
 
-## has_header detection (LOOK AT THE IMAGE ONLY):
+**compensation_analysis** (DO NOT EXTRACT AS SCT):
+```
+Name          | 2022 Salary | 2021 Salary | 2020 Salary
+John Smith    | $500,000    | $480,000    | $450,000
+Jane Doe      | $400,000    | $380,000    | $360,000
+```
+↑ Years are COLUMN HEADERS, each exec appears once
 
-**has_header = True**: The FIRST ROW of the table shows COLUMN LABELS like "Name", "Year", "Salary", "Bonus", "Stock Awards", "Total", etc. These are TEXT LABELS describing what each column contains.
+## Additional Rules:
+- MUST have **executive names visible** - if NO NAMES visible → other
+- Tables showing ONLY percentages → compensation_analysis
+- Tables with **detailed breakdowns** (Medical, Dental, 401k, Perks) → other
+- Tables titled "Potential Payments", "Termination" → termination_payments
 
-**has_header = False**: The FIRST ROW of the table shows ACTUAL DATA - a person's name (e.g., "Gary A. Stewart", "John Smith"), years (2004, 2003), dollar amounts ($132,500, $10,000). NO column labels are visible.
-
-ASK YOURSELF: What is in the FIRST ROW of this table?
-- If FIRST ROW = column labels like "Name | Year | Salary | Bonus" → has_header = True  
-- If FIRST ROW = data like "Gary A. Stewart | 2004 | $132,500" → has_header = False
-
-DO NOT assume a header exists just because the table has columns. ONLY set has_header=True if you can literally SEE the header row with column names in the image.
+## has_header detection (LOOK AT THE IMAGE):
+- **has_header = True**: FIRST ROW shows column labels like "Name", "Year", "Salary", "Total"
+- **has_header = False**: FIRST ROW shows actual data (person name, year numbers, dollar amounts)
 
 ## is_header_only detection:
-- **is_header_only = True**: The table contains ONLY the header row with column names, with NO data rows below
-- **is_header_only = False**: The table contains data rows with names and numbers
+- **is_header_only = True**: Table has ONLY header row, NO data rows
+- **is_header_only = False**: Table has data rows with names and numbers
 
 ## Table to classify:
 

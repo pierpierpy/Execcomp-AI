@@ -8,16 +8,53 @@ from enum import Enum
 # ============== Classification Schemas ==============
 
 class TableType(str, Enum):
+    """SEC DEF 14A table types for executive compensation filings."""
+    
     SUMMARY_COMPENSATION = "summary_compensation"
+    """The OFFICIAL Summary Compensation Table (SEC Item 402(c)).
+    REQUIRED: Year column with MULTIPLE YEARS as ROW VALUES (e.g., 2020, 2021, 2022 in rows).
+    REQUIRED: Executive names visible with titles (CEO, CFO, etc.).
+    REQUIRED: Standard columns - Name, Year, Salary, Bonus, Stock Awards, Total.
+    Shows same executives repeated across multiple fiscal years."""
+    
     DIRECTOR_COMPENSATION = "director_compensation"
+    """Board of Directors compensation table (SEC Item 402(k)).
+    Shows fees paid to non-employee directors, NOT executive officers."""
+    
     GRANTS_PLAN_BASED_AWARDS = "grants_plan_based_awards"
+    """Grants of Plan-Based Awards table (SEC Item 402(d)).
+    Shows individual stock/option grants with grant dates and fair values."""
+    
     OUTSTANDING_EQUITY = "outstanding_equity"
+    """Outstanding Equity Awards at Fiscal Year-End (SEC Item 402(f)).
+    Shows unvested stock and unexercised options held at year end."""
+    
     OPTION_EXERCISES = "option_exercises"
+    """Option Exercises and Stock Vested table (SEC Item 402(g)).
+    Shows options exercised and stock that vested during the year."""
+    
     BENEFICIAL_OWNERSHIP = "beneficial_ownership"
+    """Security Ownership table (SEC Item 403).
+    Shows shares owned by executives, directors, and 5%+ shareholders."""
+    
     TERMINATION_PAYMENTS = "termination_payments"
+    """Potential Payments Upon Termination or Change in Control (SEC Item 402(j)).
+    Shows hypothetical payments in termination scenarios."""
+    
     PENSION_BENEFITS = "pension_benefits"
+    """Pension Benefits table (SEC Item 402(h)).
+    Shows pension plan values and accumulated benefits."""
+    
     COMPENSATION_ANALYSIS = "compensation_analysis"
+    """Supporting compensation tables that are NOT the official SCT.
+    Includes: single-year summaries, percentage breakdowns, pay mix analysis,
+    tables with years as COLUMN HEADERS instead of row values,
+    alternative formats showing same data differently."""
+    
     OTHER = "other"
+    """Any table that doesn't fit the above categories.
+    Includes: footnote tables, detailed breakdowns (Medical, Dental, 401k),
+    tables without executive names, non-compensation tables."""
 
 
 class TableClassification(BaseModel):

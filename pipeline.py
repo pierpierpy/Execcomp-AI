@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""
+Executive Compensation Extraction Pipeline
+
+Usage:
+    python pipeline.py          # Process all 150 documents
+    python pipeline.py 10       # Process only 10 documents
+"""
+
+import asyncio
+import json
+import random
+import sys
+from pathlib import Path
+
+# =============================================================================
+# CONFIGURATION - MODIFY THESE VALUES AS NEEDED
+# =============================================================================
+
+SEED = 42424242
+SAMPLE_SIZE = 150  # Default, can be overridden by command line arg
+
+VLM_BASE_URL = "http://localhost:8000/v1"
+VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
+
+MINERU_MAX_CONCURRENT = 16
+
+# =============================================================================
+# PATHS
+# =============================================================================
+
+BASE_PATH = Path(__file__).parent.resolve()
+PDF_PATH = BASE_PATH / "pdfs"
+OUTPUT_PATH = BASE_PATH / "output"
+DATA_PATH = BASE_PATH / "data/DEF14A_all.jsonl"
+
+# =============================================================================
+# MAIN PIPELINE
+# =============================================================================
+
+async def main():
+    # Parse command line arg for sample size
+    sample_size = SAMPLE_SIZE
+    if len(sys.argv) > 1:
+        try:
+            sample_size = int(sys.argv[1])
+            print(f"Using sample size from command line: {sample_size}")
+        except ValueError:
+            print(f"Invalid sample size '{sys.argv[1]}', using default {SAMPLE_SIZE}")
+    
+    # Imports
+    from datasets import load_dataset
+    from openai import AsyncOpenAI
+    from tqdm import tqdm
+    
+    from src import (
+        convert_docs_to_pdf,
+        process_pdfs_with_mineru,
+        extract_tables_from_output,
+        merge_consecutive_tables,
+        find_summary_compensation_in_doc,
+        extract_all_summary_compensation,
+        save_classification_results,
+        save_extraction_results,
+        fix_all_orphan_images,
+    )
+    
+    # Create directories
+    PDF_PATH.mkdir(exist_ok=True)
+    OUTPUT_PATH.mkdir(exist_ok=True)
+    
+    print("="*60)
+    print("EXECUTIVE COMPENSATION EXTRACTION PIPELINE")
+    print("="*60)
+    print(f"Base path: {BASE_PATH}")
+    print(f"Sample size: {sample_size}")
+    print(f"VLM: {VLM_MODEL}")
+    print("="*60)
+    
+    # Load dataset
+    print("\n[1/6] Loading dataset...")
+    dataset = load_dataset("json", data_files=str(DATA_PATH))
+    all_docs = dataset["train"]
+    
+    random.seed(SEED)
+    indices = random.sample(range(len(all_docs)), min(sample_size, len(all_docs)))
+    docs = all_docs.select(indices)
+    print(f"✓ Loaded {len(all_docs):,} documents, sampled {len(docs)}")
+    
+    # Initialize VLM client
+    client = AsyncOpenAI(base_url=VLM_BASE_URL, api_key="dummy")
+    
+    # Step 1: Convert HTML to PDF
+    print("\n[2/6] Converting HTML to PDF...")
+    convert_docs_to_pdf(docs, base_path=BASE_PATH)
+    
+    # Step 2: Process PDFs with MinerU
+    print("\n[3/6] Processing PDFs with MinerU...")
+    failed, success = process_pdfs_with_mineru(base_path=BASE_PATH, max_concurrent=MINERU_MAX_CONCURRENT)
+    print(f"✓ MinerU: {len(success)} successful, {len(failed)} failed")
+    
+    # Step 3: Fix orphan images
+    print("\n[4/6] Fixing orphan images...")
+    fix_stats = fix_all_orphan_images(OUTPUT_PATH)
+    print(f"✓ Fixed {fix_stats['total_fixed']} tables in {fix_stats['docs_fixed']} documents")
+    
+    # Step 4: Extract tables
+    print("\n[5/6] Extracting tables from MinerU output...")
+    all_tables, extraction_stats = extract_tables_from_output(
+        output_path=OUTPUT_PATH, 
+        save_path=str(BASE_PATH / "all_tables.json")
+    )
+    print(f"✓ Extracted {len(all_tables)} tables from {len(extraction_stats['with_tables'])} documents")
+    
+    # Step 5: Classify and extract compensation data
+    print("\n[6/6] Classifying tables and extracting compensation data...")
+    doc_sources = list(set(t.get('source_doc') for t in all_tables))
+    
+    stats = {"processed": 0, "skipped_fund": 0, "skipped_done": 0, "no_tables": 0, "errors": 0}
+    
+    for source_doc in tqdm(doc_sources, desc="Processing"):
+        # Load metadata
+        metadata_path = OUTPUT_PATH / source_doc / "metadata.json"
+        if not metadata_path.exists():
+            continue
+        with open(metadata_path) as f:
+            meta = json.load(f)
+        
+        # Skip funds (no SIC code)
+        if meta.get("sic") in ("NULL", None):
+            stats["skipped_fund"] += 1
+            continue
+        
+        # Skip if already processed
+        if (OUTPUT_PATH / source_doc / "extraction_results.json").exists():
+            stats["skipped_done"] += 1
+            continue
+        
+        try:
+            # Classify tables
+            found, all_classifications = await find_summary_compensation_in_doc(
+                doc_source=source_doc,
+                all_tables=all_tables,
+                client=client,
+                model=VLM_MODEL,
+                base_path=BASE_PATH,
+                debug=False
+            )
+            
+            if not found:
+                stats["no_tables"] += 1
+                continue
+            
+            # Merge consecutive tables
+            images_base_dir = OUTPUT_PATH / source_doc / source_doc / "vlm"
+            found = merge_consecutive_tables(found, images_base_dir, all_tables, all_classifications, debug=False)
+            
+            # Extract compensation data
+            extracted = await extract_all_summary_compensation(
+                found_tables=found,
+                all_tables=all_tables,
+                client=client,
+                model=VLM_MODEL,
+                base_path=BASE_PATH,
+                metadata=meta
+            )
+            
+            # Save results
+            save_classification_results(found, OUTPUT_PATH / source_doc, metadata=meta)
+            save_extraction_results(extracted, OUTPUT_PATH / source_doc, metadata=meta)
+            stats["processed"] += 1
+            
+        except Exception as e:
+            stats["errors"] += 1
+            tqdm.write(f"✗ Error {source_doc}: {e}")
+    
+    # Print summary
+    print("\n" + "="*60)
+    print("PIPELINE COMPLETE")
+    print("="*60)
+    print(f"Processed:      {stats['processed']}")
+    print(f"No SCT found:   {stats['no_tables']}")
+    print(f"Skipped (fund): {stats['skipped_fund']}")
+    print(f"Skipped (done): {stats['skipped_done']}")
+    print(f"Errors:         {stats['errors']}")
+    print("="*60)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
