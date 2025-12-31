@@ -3,8 +3,8 @@
 Upload Executive Compensation dataset to HuggingFace Hub.
 
 Usage:
-    python to_hf.py         # Save locally only
-    python to_hf.py --push  # Save locally and push to HF Hub
+    python scripts/to_hf.py         # Save locally only
+    python scripts/to_hf.py --push  # Save locally and push to HF Hub
 """
 
 import argparse
@@ -19,7 +19,7 @@ from datasets import Dataset, Image as HFImage
 # CONFIGURATION
 # =============================================================================
 
-BASE_PATH = Path(__file__).parent.resolve()
+BASE_PATH = Path(__file__).parent.parent.resolve()  # Go up from scripts/ to project root
 OUTPUT_PATH = BASE_PATH / "output"
 HF_LOCAL_PATH = BASE_PATH / "hf/execcomp-ai-sample"
 HF_REPO = "pierjoe/execcomp-ai-sample"

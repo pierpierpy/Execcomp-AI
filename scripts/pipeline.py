@@ -3,8 +3,8 @@
 Executive Compensation Extraction Pipeline
 
 Usage:
-    python pipeline.py          # Process all 150 documents
-    python pipeline.py 10       # Process only 10 documents
+    python scripts/pipeline.py          # Process all 150 documents
+    python scripts/pipeline.py 10       # Process only 10 documents
 """
 
 import asyncio
@@ -38,7 +38,7 @@ DOC_MAX_CONCURRENT = 4  # Max concurrent document processing (classification + e
 # PATHS
 # =============================================================================
 
-BASE_PATH = Path(__file__).parent.resolve()
+BASE_PATH = Path(__file__).parent.parent.resolve()  # Go up from scripts/ to project root
 PDF_PATH = BASE_PATH / "pdfs"
 OUTPUT_PATH = BASE_PATH / "output"
 DATA_PATH = BASE_PATH / "data/DEF14A_all.jsonl"
@@ -62,6 +62,8 @@ async def main():
     from openai import AsyncOpenAI
     from tqdm import tqdm
     
+    # Add project root to path for src imports
+    sys.path.insert(0, str(BASE_PATH))
     from src import (
         convert_docs_to_pdf,
         process_pdfs_with_mineru,
