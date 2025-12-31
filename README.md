@@ -5,13 +5,36 @@ AI-powered pipeline to extract executive compensation data from SEC DEF 14A prox
 ## Overview
 ![Schema](docs/schema.png)
 
-Extracts **Summary Compensation Tables** from 100K+ SEC filings (2005-present) using:
+Extracts **Summary Compensation Tables** from 100K+ SEC filings (2005-2022) using:
 - **MinerU** for PDF table extraction (images + HTML)
 - **Qwen3-VL-32B** for classification and structured extraction
 
 ```
 SEC Filing → PDF → MinerU → Table Classification → JSON Extraction
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+stuff/
+├── scripts/
+│   ├── pipeline.py      # Main extraction pipeline
+│   └── to_hf.py         # HuggingFace upload script
+├── src/
+│   ├── vlm/             # VLM classification & extraction
+│   ├── io/              # Results saving & loading
+│   ├── mineru/          # PDF parsing with MinerU
+│   └── download/        # SEC EDGAR downloader
+├── notebooks/
+│   └── pipeline.ipynb   # Interactive development
+├── data/
+│   └── DEF14A_all.jsonl # Filing metadata (local)
+└── output/              # Processed results
+```
+
+---
 
 ## Quick Start
 
@@ -29,20 +52,83 @@ CUDA_VISIBLE_DEVICES=2,3 mineru-openai-server --engine vllm --port 30000 \
 
 ### 2. Run Pipeline
 
-Open `pipeline.ipynb` and run cells in order:
+**Option A: Command line**
+```bash
+python scripts/pipeline.py
+```
 
-1. **Cell 2** - Load SEC filings from `data/DEF14A_all.jsonl` (on Hugging Face `pierjoe/SEC-DEF14A-2005-2022`)
-2. **Cell 3** - Convert to PDF + extract tables with MinerU
-3. **Cell 4** - Count documents with/without tables
-4. **Cell 10** - Run classification + extraction on all documents
+**Option B: Notebook**
+Open `notebooks/pipeline.ipynb` and run cells in order.
 
-The pipeline will:
-- Skip **funds** (SIC = NULL) - they don't have exec compensation
-- Skip **already processed** documents (checks for `extraction_results.json`)
-- **Classify** each table using VLM (summary_compensation, director_compensation, etc.)
-- **Merge** tables split across pages (detects header-only tables)
-- **Extract** structured JSON from Summary Compensation Tables
-- **Save** results to `output/{doc_id}/`
+### 3. Check Output
+
+```
+output/{cik}_{year}_{accession}/
+├── extraction_results.json     # ✅ Main output
+├── classification_results.json # Table classifications
+├── metadata.json               # Document metadata
+├── content_list.json           # MinerU parse results
+├── images/                     # Extracted page images
+└── tables/                     # Extracted table images
+```
+
+---
+
+## ⚙️ Configuration
+
+Edit variables at the top of `scripts/pipeline.py`:
+
+```python
+# Data source
+HF_DATASET = "pierjoe/SEC-DEF14A-2005-2022"  # HuggingFace dataset
+LOCAL_DATASET = "data/DEF14A_all.jsonl"       # Local file (priority)
+
+# Processing limits
+LIMIT = 10                        # Max documents to process (None = all)
+YEARS = list(range(2005, 2023))   # Years to include
+
+# Parallelization
+DOC_MAX_CONCURRENT = 4            # Concurrent documents
+
+# Reprocessing behavior
+DONT_SKIP = False                 # Set True to force reprocess all
+```
+
+### Parallelization Levels
+
+| Level | Config | Default | File |
+|-------|--------|---------|------|
+| Documents | `DOC_MAX_CONCURRENT` | 4 | `scripts/pipeline.py` |
+| Classification | `CLASSIFY_MAX_CONCURRENT` | 8 | `src/vlm/classification.py` |
+| Extraction | `EXTRACT_MAX_CONCURRENT` | 4 | `src/vlm/extraction.py` |
+
+### Skip Logic
+
+Documents are automatically skipped if:
+- `extraction_results.json` exists → already processed with SCT
+- `no_sct_found.json` exists → previously determined no SCT
+
+Set `DONT_SKIP = True` to force reprocessing all documents.
+
+---
+
+## 📤 Upload to HuggingFace
+
+After processing, upload results to HuggingFace:
+
+```bash
+# Build and push dataset
+python scripts/to_hf.py --push
+```
+
+This will:
+1. Scan all `output/*/extraction_results.json` files
+2. Build a HuggingFace Dataset with all extracted data
+3. Push to `pierjoe/execcomp-ai` repository
+
+Without `--push`, it only shows statistics without uploading.
+
+---
 
 ## Example
 
@@ -69,31 +155,52 @@ The pipeline will:
 }
 ```
 
+---
+
 ## Key Features
 
 | Challenge | Solution |
 |-----------|----------|
-| HTML + TXT formats | `pdfkit` for HTML, PIL+reportlab for TXT |
 | Tables split across pages | Merge based on `is_header_only` flag + bbox proximity |
 | Pre-2006 vs Post-2006 formats | Column mapping with synonyms |
 | Funds (no exec comp) | Auto-skip when SIC = NULL |
+| Resume after interruption | Skip docs with existing results |
+| Slow processing | 3-level parallelization |
 
-## Output
+---
 
-Per document in `output/{doc_id}/`:
-- `classification_results.json` - Tables found + type
-- `extraction_results.json` - Structured compensation data
+## 📊 Pipeline Statistics
+
+At the end of processing, the pipeline shows:
+
+```
+============================================================
+                    PROCESSING STATISTICS                   
+============================================================
+Total documents in dataset:     200
+Funds (skipped):                 40
+Non-fund documents:             160
+  ├─ With SCT tables:           115 (187 tables)
+  └─ No SCT found:               45
+============================================================
+```
+
+---
 
 ## Requirements
 
 - Python 3.10+
 - GPU with 40GB+ VRAM (or adjust tensor parallelism)
-- `vllm`, `mineru`, `pdfkit`, `pillow`, `openai`
 
 ```bash
 pip install -r requirements.txt
 sudo apt-get install wkhtmltopdf
 ```
+
+Key dependencies: `vllm`, `openai`, `aiohttp`, `datasets`, `huggingface_hub`
+
+---
+
 ## OpenAI Compatible
 
 The pipeline uses **OpenAI-compatible APIs** for classification and extraction. You can swap local models with cloud APIs:
@@ -109,6 +216,7 @@ MODEL = "gpt-4o"  # or any vision model
 
 Only **MinerU** requires local GPU for PDF table extraction. Everything else works with cloud APIs.
 
+---
 
 ## 🚧 Work in Progress
 
