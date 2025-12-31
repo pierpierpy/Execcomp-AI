@@ -26,6 +26,7 @@ from .processing import (
 from .io import (
     save_classification_results,
     save_extraction_results,
+    save_no_sct_results,
     display_extraction_result,
     display_all_results,
     display_table_preview,

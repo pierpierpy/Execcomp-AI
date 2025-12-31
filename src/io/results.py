@@ -47,6 +47,36 @@ def save_classification_results(
     return save_path
 
 
+def save_no_sct_results(
+    output_path: Path,
+    metadata: dict = None
+) -> Path:
+    """
+    Save a marker file indicating no SCT was found in this document.
+    
+    Args:
+        output_path: Directory where to save the results
+        metadata: Optional additional metadata to include
+        
+    Returns:
+        Path to the saved JSON file
+    """
+    output_path = Path(output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "sct_found": False,
+        "metadata": metadata or {},
+    }
+    
+    save_path = output_path / "no_sct_found.json"
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, default=json_serial)
+    
+    return save_path
+
+
 def save_extraction_results(
     extracted_data: list[dict],
     output_path: Path,

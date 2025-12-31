@@ -13,12 +13,16 @@ import random
 import sys
 from pathlib import Path
 
+# per vedere quali sono state mergiate
+# grep -r '"merged": true' /home/pdipasquale/MIIA/stuff/output/ --include="*.json" -l
+
 # =============================================================================
 # CONFIGURATION - MODIFY THESE VALUES AS NEEDED
 # =============================================================================
 
 SEED = 42424242
 SAMPLE_SIZE = 150  # Default, can be overridden by command line arg
+DONT_SKIP = False  # If True, reprocess documents even if they have no_sct_found.json
 
 VLM_BASE_URL = "http://localhost:8000/v1"
 VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
@@ -62,6 +66,7 @@ async def main():
         extract_all_summary_compensation,
         save_classification_results,
         save_extraction_results,
+        save_no_sct_results,
         fix_all_orphan_images,
     )
     
@@ -136,6 +141,11 @@ async def main():
             stats["skipped_done"] += 1
             continue
         
+        # Skip if already marked as no SCT (unless DONT_SKIP is True)
+        if not DONT_SKIP and (OUTPUT_PATH / source_doc / "no_sct_found.json").exists():
+            stats["skipped_done"] += 1
+            continue
+
         try:
             # Classify tables
             found, all_classifications = await find_summary_compensation_in_doc(
@@ -148,10 +158,8 @@ async def main():
             )
             
             if not found:
-                stats["no_tables"] += 1
-                continue
-            
-            # Merge consecutive tables
+                # Save marker indicating no SCT was found
+                save_no_sct_results(OUTPUT_PATH / source_doc, metadata=meta)
             images_base_dir = OUTPUT_PATH / source_doc / source_doc / "vlm"
             found = merge_consecutive_tables(found, images_base_dir, all_tables, all_classifications, debug=False)
             
