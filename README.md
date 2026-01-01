@@ -218,9 +218,11 @@ Only **MinerU** requires local GPU for PDF table extraction. Everything else wor
 
 ---
 
-## � Current Progress
+## Current Progress
 
 > 🚧 **Work in Progress** - Processing 100K+ SEC filings
+<details><summary>📈 Stats on current data</summary>
+
 
 | Documents | Count |
 |-----------|-------|
@@ -229,6 +231,9 @@ Only **MinerU** requires local GPU for PDF table extraction. Everything else wor
 | With SCT | 1,528 |
 | No SCT | 96 |
 | **Tables extracted** | **1,860** |
+</details>
+
+<details><summary>📊 Data analysis current output</summary>
 
 | Compensation Stats | Value |
 |-------------------|-------|
@@ -236,9 +241,9 @@ Only **MinerU** requires local GPU for PDF table extraction. Everything else wor
 | Mean total comp | $2.12M |
 | Median total comp | $0.96M |
 | Max total comp | $147.7M |
-
+</details>
 <details>
-<summary>🏆 Top 5 Highest Paid</summary>
+<summary>🏆 Current Top 5 Highest Paid</summary>
 
 | Executive | Company | Year | Total |
 |-----------|---------|------|-------|
