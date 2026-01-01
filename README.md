@@ -61,8 +61,7 @@ stuff/
 
 ```bash
 # GPU 0,1: Qwen3-VL for classification/extraction
-CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qwen3-VL-32B-Instruct \
-    --tensor-parallel-size 2 --port 8000
+CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qwen3-VL-32B-Instruct --tensor-parallel-size 2 --port 8000 --max-model-len 32768
 
 # GPU 2,3: MinerU for PDF processing  
 CUDA_VISIBLE_DEVICES=2,3 mineru-openai-server --engine vllm --port 30000 \
