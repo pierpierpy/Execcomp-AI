@@ -32,7 +32,7 @@ VLM_BASE_URL = "http://localhost:8000/v1"
 VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
 
 MINERU_MAX_CONCURRENT = 16
-DOC_MAX_CONCURRENT = 4  # Max concurrent document processing (classification + extraction)
+DOC_MAX_CONCURRENT = 8  # Max concurrent document processing (classification + extraction)
 
 # =============================================================================
 # PATHS
@@ -130,6 +130,25 @@ async def main():
     )
     print(f"✓ Extracted {len(all_tables)} tables from {len(extraction_stats['with_tables'])} documents")
     
+    # Mark documents with 0 tables as no_sct_found (if non-fund and not already processed)
+    for doc_name in extraction_stats.get('no_tables', []):
+        doc_dir = OUTPUT_PATH / doc_name
+        metadata_path = doc_dir / "metadata.json"
+        if not metadata_path.exists():
+            continue
+        with open(metadata_path) as f:
+            meta = json.load(f)
+        # Skip funds
+        if meta.get("sic") in ("NULL", None):
+            continue
+        # Skip if already has results
+        if (doc_dir / "extraction_results.json").exists():
+            continue
+        if (doc_dir / "no_sct_found.json").exists():
+            continue
+        # Mark as no SCT (no tables from MinerU)
+        save_no_sct_results(doc_dir, metadata=meta)
+    
     # Step 5: Classify and extract compensation data
     print("\n[6/6] Classifying tables and extracting compensation data...")
     doc_sources = list(set(t.get('source_doc') for t in all_tables))
@@ -221,6 +240,7 @@ async def main():
     total_with_sct = 0
     total_no_sct = 0
     total_tables = 0
+    total_pending = 0  # Docs without results yet
     
     for d in OUTPUT_PATH.iterdir():
         if not d.is_dir():
@@ -247,6 +267,8 @@ async def main():
                 total_tables += len(classification.get("tables", []))
         elif (d / "no_sct_found.json").exists():
             total_no_sct += 1
+        else:
+            total_pending += 1  # Has metadata but no results yet
     
     duplicates = total_tables - total_with_sct  # Docs with multiple tables
     
@@ -260,6 +282,8 @@ async def main():
     print(f"  Non-funds:    {total_docs - total_funds}")
     print(f"    With SCT:   {total_with_sct} ({total_tables} tables, {duplicates} extra)")
     print(f"    No SCT:     {total_no_sct}")
+    if total_pending > 0:
+        print(f"    Pending:    {total_pending}")
     print(f"Errors:         {stats['errors']}")
     print("="*60)
 
