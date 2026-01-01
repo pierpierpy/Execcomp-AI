@@ -218,10 +218,36 @@ Only **MinerU** requires local GPU for PDF table extraction. Everything else wor
 
 ---
 
-## 🚧 Work in Progress
+## � Current Progress
 
-The pipeline is currently running on the largest possible set of SEC filings. In the meantime, you can explore some initial samples here:
+> 🚧 **Work in Progress** - Processing 100K+ SEC filings
 
-👉 **[pierjoe/execcomp-ai-sample](https://huggingface.co/datasets/pierjoe/execcomp-ai-sample)**
+| Documents | Count |
+|-----------|-------|
+| Processed | 2,000 |
+| Funds (skipped) | 376 |
+| With SCT | 1,528 |
+| No SCT | 96 |
+| **Tables extracted** | **1,860** |
 
-> ⚠️ **Note:** These are early samples and may contain errors due to bugs that are being fixed. The final dataset will be more accurate.
+| Compensation Stats | Value |
+|-------------------|-------|
+| Executive records | 19,288 |
+| Mean total comp | $2.12M |
+| Median total comp | $0.96M |
+| Max total comp | $147.7M |
+
+<details>
+<summary>🏆 Top 5 Highest Paid</summary>
+
+| Executive | Company | Year | Total |
+|-----------|---------|------|-------|
+| George Kurtz | CrowdStrike | 2022 | $147.7M |
+| Satya Nadella | Microsoft | 2014 | $84.3M |
+| Steve Mollenkopf | Qualcomm | 2016 | $60.7M |
+| Lisa T. Su | AMD | 2020 | $58.5M |
+| Paul E. Jacobs | Qualcomm | 2016 | $56.9M |
+
+</details>
+
+👉 **Dataset**: [pierjoe/execcomp-ai-sample](https://huggingface.co/datasets/pierjoe/execcomp-ai-sample)

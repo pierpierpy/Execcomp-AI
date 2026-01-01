@@ -13,6 +13,7 @@ from pathlib import Path
 from collections import Counter
 
 from datasets import Dataset, Image as HFImage
+from huggingface_hub import HfApi
 
 
 # =============================================================================
@@ -21,6 +22,7 @@ from datasets import Dataset, Image as HFImage
 
 BASE_PATH = Path(__file__).parent.parent.resolve()  # Go up from scripts/ to project root
 OUTPUT_PATH = BASE_PATH / "output"
+DOCS_PATH = BASE_PATH / "docs"
 HF_LOCAL_PATH = BASE_PATH / "hf/execcomp-ai-sample"
 HF_REPO = "pierjoe/execcomp-ai-sample"
 
@@ -147,6 +149,32 @@ def main():
     if args.push:
         print(f"\n[PUSH] Uploading to {HF_REPO}...")
         hf_dataset.push_to_hub(HF_REPO)
+        print(f"✓ Dataset pushed")
+        
+        # Upload docs (images + README)
+        api = HfApi()
+        
+        # Upload README
+        readme_path = DOCS_PATH / "HF_README.md"
+        if readme_path.exists():
+            print(f"   Uploading README.md...")
+            api.upload_file(
+                path_or_fileobj=str(readme_path),
+                path_in_repo="README.md",
+                repo_id=HF_REPO,
+                repo_type="dataset"
+            )
+        
+        # Upload doc images
+        for img_file in DOCS_PATH.glob("*.png"):
+            print(f"   Uploading {img_file.name}...")
+            api.upload_file(
+                path_or_fileobj=str(img_file),
+                path_in_repo=f"docs/{img_file.name}",
+                repo_id=HF_REPO,
+                repo_type="dataset"
+            )
+        
         print(f"✓ Pushed to https://huggingface.co/datasets/{HF_REPO}")
 
     print("\n" + "="*60)
