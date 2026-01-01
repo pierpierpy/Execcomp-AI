@@ -2,6 +2,25 @@
 
 AI-powered pipeline to extract executive compensation data from SEC DEF 14A proxy statements.
 
+<details>
+<summary><b>📊 Current Progress & Statistics</b> (click to expand)</summary>
+
+> 🚧 **Work in Progress** - Processing 100K+ SEC filings
+
+![Pipeline Stats](docs/stats_pipeline.png)
+
+![Compensation Stats](docs/stats_compensation.png)
+
+![Top 10](docs/stats_top10.png)
+
+![Document Breakdown](docs/chart_pipeline.png)
+
+👉 **Dataset**: [pierjoe/execcomp-ai-sample](https://huggingface.co/datasets/pierjoe/execcomp-ai-sample)
+
+</details>
+
+---
+
 ## Overview
 ![Schema](docs/schema.png)
 
@@ -169,24 +188,6 @@ Without `--push`, it only shows statistics without uploading.
 
 ---
 
-## 📊 Pipeline Statistics
-
-At the end of processing, the pipeline shows:
-
-```
-============================================================
-                    PROCESSING STATISTICS                   
-============================================================
-Total documents in dataset:     200
-Funds (skipped):                 40
-Non-fund documents:             160
-  ├─ With SCT tables:           115 (187 tables)
-  └─ No SCT found:               45
-============================================================
-```
-
----
-
 ## Requirements
 
 - Python 3.10+
@@ -215,44 +216,3 @@ MODEL = "gpt-4o"  # or any vision model
 ```
 
 Only **MinerU** requires local GPU for PDF table extraction. Everything else works with cloud APIs.
-
----
-
-## Current Progress
-
-> 🚧 **Work in Progress** - Processing 100K+ SEC filings
-<details><summary>📈 Stats on current data</summary>
-
-
-| Documents | Count |
-|-----------|-------|
-| Processed | 2,000 |
-| Funds (skipped) | 376 |
-| With SCT | 1,528 |
-| No SCT | 96 |
-| **Tables extracted** | **1,860** |
-</details>
-
-<details><summary>📊 Data analysis current output</summary>
-
-| Compensation Stats | Value |
-|-------------------|-------|
-| Executive records | 19,288 |
-| Mean total comp | $2.12M |
-| Median total comp | $0.96M |
-| Max total comp | $147.7M |
-</details>
-<details>
-<summary>🏆 Current Top 5 Highest Paid</summary>
-
-| Executive | Company | Year | Total |
-|-----------|---------|------|-------|
-| George Kurtz | CrowdStrike | 2022 | $147.7M |
-| Satya Nadella | Microsoft | 2014 | $84.3M |
-| Steve Mollenkopf | Qualcomm | 2016 | $60.7M |
-| Lisa T. Su | AMD | 2020 | $58.5M |
-| Paul E. Jacobs | Qualcomm | 2016 | $56.9M |
-
-</details>
-
-👉 **Dataset**: [pierjoe/execcomp-ai-sample](https://huggingface.co/datasets/pierjoe/execcomp-ai-sample)

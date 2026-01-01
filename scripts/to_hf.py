@@ -9,6 +9,8 @@ Usage:
 
 import argparse
 import json
+import subprocess
+import sys
 from pathlib import Path
 from collections import Counter
 
@@ -25,6 +27,17 @@ OUTPUT_PATH = BASE_PATH / "output"
 DOCS_PATH = BASE_PATH / "docs"
 HF_LOCAL_PATH = BASE_PATH / "hf/execcomp-ai-sample"
 HF_REPO = "pierjoe/execcomp-ai-sample"
+
+
+def run_analysis():
+    """Run do_analysis.py to generate updated stats images."""
+    print("\n[0/4] Generating analysis images...")
+    analysis_script = BASE_PATH / "scripts" / "do_analysis.py"
+    result = subprocess.run([sys.executable, str(analysis_script)], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"⚠️  Warning: Analysis script failed: {result.stderr[:200]}")
+    else:
+        print("✓ Analysis images updated")
 
 
 def build_dataset(output_path: Path) -> list[dict]:
@@ -107,6 +120,9 @@ def main():
     print("="*60)
     print("BUILDING HUGGINGFACE DATASET")
     print("="*60)
+
+    # Run analysis to generate updated images
+    run_analysis()
 
     # Build records
     print("\n[1/3] Collecting records from output...")

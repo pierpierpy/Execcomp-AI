@@ -31,8 +31,8 @@ DONT_SKIP = False  # If True, reprocess documents even if they have no_sct_found
 VLM_BASE_URL = "http://localhost:8000/v1"
 VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
 
-MINERU_MAX_CONCURRENT = 16
-DOC_MAX_CONCURRENT = 8  # Max concurrent document processing (classification + extraction)
+MINERU_MAX_CONCURRENT = 32
+DOC_MAX_CONCURRENT = 16  # Max concurrent document processing (classification + extraction)
 
 # =============================================================================
 # PATHS
