@@ -9,7 +9,8 @@ PDFS_DIR = "pdfs"
 OUTPUT_DIR = "output"
 MINERU_BACKEND = "vlm-http-client"
 MINERU_URL = "http://localhost:30000"
-DEFAULT_MAX_CONCURRENT = 4
+MINERU_LANG = "en"  # English for SEC documents
+DEFAULT_MAX_CONCURRENT = 8  # Reduced from higher values for better throughput
 
 
 def is_mineru_processed(output_dir: Path) -> bool:
@@ -41,7 +42,8 @@ def process_pdf(pdf_path, output_base: Path, semaphore: threading.Semaphore):
             "-p", str(pdf_path),
             "-o", str(output_dir),
             "-b", MINERU_BACKEND,
-            "-u", MINERU_URL
+            "-u", MINERU_URL,
+            "-l", MINERU_LANG,  # Language for OCR
         ]
         
         result = subprocess.run(cmd, capture_output=True, text=True)
