@@ -66,6 +66,7 @@ async def main():
     # Add project root to path for src imports
     sys.path.insert(0, str(BASE_PATH))
     from src import (
+        get_doc_id,
         convert_docs_to_pdf,
         process_pdfs_with_mineru,
         extract_tables_from_output,
@@ -100,10 +101,40 @@ async def main():
         all_docs = load_dataset(HF_DATASET, split="train")
         print(f"✓ Loaded from HuggingFace: {HF_DATASET}")
     
+    # Build doc_id -> index mapping
+    doc_id_to_idx = {}
+    for i, doc in enumerate(all_docs):
+        doc_id_to_idx[get_doc_id(doc)] = i
+    
+    # Find already processed documents (have content_list.json from MinerU)
+    already_processed_ids = set()
+    for folder in OUTPUT_PATH.iterdir():
+        if folder.is_dir() and list(folder.rglob("*_content_list.json")):
+            already_processed_ids.add(folder.name)
+    
+    # Filter to only those that exist in dataset
+    processed_indices = [doc_id_to_idx[doc_id] for doc_id in already_processed_ids if doc_id in doc_id_to_idx]
+    print(f"✓ Found {len(processed_indices)} already processed documents")
+    
+    # If we need more, add from remaining (shuffled with seed)
+    remaining_indices = [i for i in range(len(all_docs)) if i not in set(processed_indices)]
     random.seed(SEED)
-    indices = random.sample(range(len(all_docs)), min(sample_size, len(all_docs)))
+    random.shuffle(remaining_indices)
+    
+    # Take processed + as many new as needed to reach sample_size
+    if len(processed_indices) >= sample_size:
+        indices = processed_indices[:sample_size]
+        print(f"✓ Using {len(indices)} from already processed")
+    else:
+        needed = sample_size - len(processed_indices)
+        indices = processed_indices + remaining_indices[:needed]
+        print(f"✓ Using {len(processed_indices)} processed + {min(needed, len(remaining_indices))} new")
+    
     docs = all_docs.select(indices)
-    print(f"✓ Loaded {len(all_docs):,} documents, sampled {len(docs)}")
+    print(f"✓ Total sample: {len(docs)} documents")
+    
+    # Get doc_ids for this sample
+    doc_ids = [get_doc_id(doc) for doc in docs]
     
     # Initialize VLM client
     client = AsyncOpenAI(base_url=VLM_BASE_URL, api_key="dummy")
@@ -112,9 +143,9 @@ async def main():
     print("\n[2/6] Converting HTML to PDF...")
     convert_docs_to_pdf(docs, base_path=BASE_PATH)
     
-    # Step 2: Process PDFs with MinerU
+    # Step 2: Process PDFs with MinerU (only for this sample)
     print("\n[3/6] Processing PDFs with MinerU...")
-    failed, success = process_pdfs_with_mineru(base_path=BASE_PATH, max_concurrent=MINERU_MAX_CONCURRENT)
+    failed, success = process_pdfs_with_mineru(base_path=BASE_PATH, max_concurrent=MINERU_MAX_CONCURRENT, doc_ids=doc_ids)
     print(f"✓ MinerU: {len(success)} successful, {len(failed)} failed")
     
     # Step 3: Fix orphan images

@@ -53,18 +53,31 @@ def process_pdf(pdf_path, output_base: Path, semaphore: threading.Semaphore):
         return 'success', pdf_path.name, None
 
 
-def process_pdfs_with_mineru(base_path: Path = None, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
-    """Process all PDFs in pdfs/ folder with MinerU.
+def process_pdfs_with_mineru(base_path: Path = None, max_concurrent: int = DEFAULT_MAX_CONCURRENT, doc_ids: list = None):
+    """Process PDFs with MinerU.
     
     Args:
         base_path: Base path for pdfs/ and output/ directories. If None, uses current dir.
         max_concurrent: Maximum number of concurrent MinerU processes
+        doc_ids: List of document IDs to process. If None, processes all PDFs in pdfs/ folder.
     """
     base = Path(base_path) if base_path else Path(".")
     pdfs_dir = base / PDFS_DIR
     output_base = base / OUTPUT_DIR
     
-    pdf_files = list(pdfs_dir.glob("*.pdf"))
+    # Get PDF files to consider
+    if doc_ids is not None:
+        # Only process specific documents
+        pdf_files = []
+        for doc_id in doc_ids:
+            pdf_path = pdfs_dir / f"{doc_id}.pdf"
+            if pdf_path.exists():
+                pdf_files.append(pdf_path)
+        print(f"Processing {len(pdf_files)} PDFs from sample (of {len(doc_ids)} requested)")
+    else:
+        # Process all PDFs in folder
+        pdf_files = list(pdfs_dir.glob("*.pdf"))
+        print(f"Found {len(pdf_files)} PDFs total")
     
     # Check which files need processing
     to_process = []
