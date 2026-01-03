@@ -163,7 +163,16 @@ def collect_pipeline_data(output_path: Path, tracker) -> tuple[pd.DataFrame, pd.
                 for exec_data in extraction["data"][i].get("executives", []):
                     exec_data["cik"] = meta.get("cik")
                     exec_data["company"] = meta.get("company")
-                    exec_data["filing_year"] = meta.get("year")
+                    exec_data["filing_year"] = meta.get("year")  # Year of the SEC filing
+                    # Use fiscal_year from executive data if available, otherwise fall back to filing year
+                    # TODO: Missing fiscal_year may indicate a FALSE POSITIVE in classification.
+                    #       Example: a "Director Compensation" table misclassified as SCT won't have
+                    #       the typical SCT structure with fiscal_year for each executive.
+                    #       HINT: These false positives likely have low sct_probability scores,
+                    #       so filtering by sct_probability >= 0.7 should eliminate most of them.
+                    #       Consider logging/flagging these cases for review.
+                    if "fiscal_year" not in exec_data or exec_data.get("fiscal_year") is None:
+                        exec_data["fiscal_year"] = meta.get("year")
                     exec_data["sic"] = meta.get("sic")
                     exec_records.append(exec_data)
     
@@ -239,13 +248,13 @@ def generate_stats_images(
         ))
         
         # --- Top 10 Table ---
-        top_execs = exec_df.nlargest(10, 'total')[['name', 'company', 'filing_year', 'total']].copy()
+        top_execs = exec_df.nlargest(10, 'total')[['name', 'company', 'fiscal_year', 'total']].copy()
         top_data = []
         for _, row in top_execs.iterrows():
             top_data.append([
                 row['name'][:30],
                 row['company'][:25],
-                str(int(row['filing_year'])),
+                str(int(row['fiscal_year'])),
                 f"${row['total']/1e6:.1f}M"
             ])
         
@@ -379,20 +388,20 @@ def _generate_charts(
     
     # --- Line Chart: Trends Over Time ---
     if len(exec_df) > 0:
-        yearly_comp = exec_df.groupby('filing_year')['total'].agg(['mean', 'median']).reset_index()
+        yearly_comp = exec_df.groupby('fiscal_year')['total'].agg(['mean', 'median']).reset_index()
         
         fig, ax = plt.subplots(figsize=(14, 5))
-        ax.plot(yearly_comp['filing_year'], yearly_comp['mean'] / 1e6, 
+        ax.plot(yearly_comp['fiscal_year'], yearly_comp['mean'] / 1e6, 
                 marker='o', linewidth=2, label='Mean', color='#3498db')
-        ax.plot(yearly_comp['filing_year'], yearly_comp['median'] / 1e6, 
+        ax.plot(yearly_comp['fiscal_year'], yearly_comp['median'] / 1e6, 
                 marker='s', linewidth=2, label='Median', color='#e74c3c')
         
-        ax.set_xlabel('Year', fontsize=12)
+        ax.set_xlabel('Fiscal Year', fontsize=12)
         ax.set_ylabel('Total Compensation ($ millions)', fontsize=12)
         ax.set_title(f'Executive Compensation Trends Over Time (updated {today})', fontsize=14, fontweight='bold')
         ax.legend()
-        ax.set_xticks(yearly_comp['filing_year'])
-        ax.set_xticklabels(yearly_comp['filing_year'].astype(int), rotation=45)
+        ax.set_xticks(yearly_comp['fiscal_year'])
+        ax.set_xticklabels(yearly_comp['fiscal_year'].astype(int), rotation=45)
         
         plt.tight_layout()
         chart_path = docs_path / 'chart_trends.png'

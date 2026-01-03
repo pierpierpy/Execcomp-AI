@@ -35,8 +35,9 @@ HF_REPO = "pierjoe/execcomp-ai-sample"
 # Classifier settings
 # Local path or HuggingFace repo ID. If local doesn't exist, downloads from HF.
 # Set to None to use default (tries local first, then HuggingFace)
-CLASSIFIER_MODEL_PATH = None  # or "pierjoe/Qwen3-VL-4B-SCT-Classifier" or local path
-CLASSIFIER_BATCH_SIZE = 4
+# CLASSIFIER_MODEL_PATH = None  # or "pierjoe/Qwen3-VL-4B-SCT-Classifier" or local path
+CLASSIFIER_MODEL_PATH = "hf/models/exp3-weighted-loss-qwen3-bigger_dataset/full"
+CLASSIFIER_BATCH_SIZE = 8
 CLASSIFIER_DEVICE = "cuda:0"
 
 # Filtering (set to None to keep all records)
