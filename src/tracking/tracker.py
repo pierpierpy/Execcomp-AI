@@ -178,8 +178,9 @@ class Tracker:
         print("By phase completed:")
         print(f"  [1] PDF created:     {s['by_phase'].get('pdf_created', 0):,}")
         print(f"  [2] MinerU done:     {s['by_phase'].get('mineru_done', 0):,}")
-        print(f"  [3] Classified:      {s['by_phase'].get('classified', 0):,}")
-        print(f"  [4] Extracted:       {s['by_phase'].get('extracted', 0):,}")
+        print(f"  [3] VLM processed:   {s['by_phase'].get('extracted', 0):,}")
+        print(f"      → Found SCT:     {s['by_status'].get('complete', 0):,}")
+        print(f"      → No SCT:        {s['by_status'].get('no_sct', 0):,}")
         print("=" * 50)
     
     # -------------------------------------------------------------------------
