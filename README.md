@@ -27,9 +27,11 @@ AI-powered pipeline to extract executive compensation data from SEC DEF 14A prox
 Extracts **Summary Compensation Tables** from 100K+ SEC filings (2005-2022) using:
 - **MinerU** for PDF table extraction (images + HTML)
 - **Qwen3-VL-32B** for classification and structured extraction
+- **Qwen3-VL-4B** (fine-tuned) for post-processing false positive filtering
 
 ```
-SEC Filing → PDF → MinerU → Table Classification → JSON Extraction
+SEC Filing → PDF → MinerU → VLM Classification → Extraction → Post-Processing → HF Dataset
+                              (Qwen3-32B)         (Qwen3-32B)   (Qwen3-4B)
 ```
 
 ---
@@ -39,16 +41,15 @@ SEC Filing → PDF → MinerU → Table Classification → JSON Extraction
 ```
 stuff/
 ├── scripts/
-│   ├── pipeline.py       # Main extraction pipeline
-│   ├── do_analysis.py    # Generate stats and charts
-│   ├── fix_pending.py    # Find and fix pending documents
-│   ├── cleanup.py        # Remove incomplete documents
-│   └── to_hf.py          # HuggingFace upload script
+│   ├── pipeline.py         # Main extraction pipeline
+│   ├── post_processing.py   # Build HF dataset with analysis
+│   └── fix_pending.py       # Find and fix pending documents
 ├── src/
-│   ├── vlm/              # VLM classification & extraction
-│   ├── processing/       # PDF conversion, MinerU, table extraction
-│   ├── io/               # Results saving & visualization
-│   └── tracking/         # Pipeline tracker (central status)
+│   ├── vlm/                 # VLM classification & extraction
+│   ├── processing/          # PDF conversion, MinerU, table extraction
+│   ├── io/                  # Results saving & visualization
+│   ├── tracking/            # Pipeline tracker (central status)
+│   └── analysis/            # Stats, charts, threshold analysis
 ├── notebooks/
 │   └── pipeline.ipynb    # Interactive development
 ├── data/
@@ -83,11 +84,26 @@ python scripts/pipeline.py
 # Process up to 1000 documents total
 python scripts/pipeline.py 1000
 
-# Continue processing pending documents
-python scripts/pipeline.py --continue
 ```
 
-### 3. Check Status
+To continue processing pending documents, edit `CONTINUE_MODE = True` in the script.
+
+### 3. Post-Processing & Upload
+
+```bash
+# Build dataset with analysis, threshold analysis, and save locally
+python scripts/post_processing.py
+
+# Build and push to HuggingFace
+python scripts/post_processing.py --push
+```
+
+Configuration in script:
+- `RUN_ANALYSIS = True` - Generate stats images
+- `RUN_THRESHOLD_ANALYSIS = True` - Analyze optimal threshold
+- `SCT_PROBABILITY_THRESHOLD = None` - Filter threshold (None = keep all)
+
+### 4. Check Status
 
 ```bash
 python scripts/pipeline.py
@@ -126,14 +142,40 @@ python scripts/pipeline.py
 
 # Process N documents total (adds new if needed)
 python scripts/pipeline.py 10000
-
-# Continue processing pending documents
-python scripts/pipeline.py --continue
 ```
+
+To process pending documents, edit `CONTINUE_MODE = True` in the script.
 
 The pipeline tracks all documents in `pipeline_tracker.json`:
 - **Phases**: `pdf_created` → `mineru_done` → `classified` → `extracted`
 - **Status**: `complete`, `no_sct`, `fund`, `pending`
+
+### `post_processing.py` - Build Final Dataset
+
+Builds the HuggingFace dataset with `sct_probability` scores from a fine-tuned binary classifier.
+This is the **single script for dataset creation** - runs analysis, threshold optimization, and uploads.
+
+```bash
+# Build dataset locally (with full analysis output)
+python scripts/post_processing.py
+
+# Build and push to HuggingFace (includes README + images)
+python scripts/post_processing.py --push
+```
+
+Configuration (edit in script):
+- `CLASSIFIER_MODEL_PATH` - Path to fine-tuned classifier
+- `CLASSIFIER_DEVICE` - GPU device (e.g., "cuda:0")
+- `SCT_PROBABILITY_THRESHOLD` - Filter threshold (None = keep all)
+- `RUN_ANALYSIS` - Generate pipeline stats and charts
+- `RUN_THRESHOLD_ANALYSIS` - Find optimal threshold for single-SCT
+- `HF_REPO` - HuggingFace repository name
+
+Outputs:
+- Stats images in `docs/` (pipeline, compensation, charts)
+- Threshold analysis plot (`docs/analysis_threshold.png`)
+- Recommended threshold printed to console
+- Dataset saved locally and pushed to HF (with `--push`)
 
 ### `fix_pending.py` - Fix Failed Documents
 
@@ -150,43 +192,24 @@ Categories:
 - **No MinerU**: MinerU processing failed  
 - **Not classified**: Has tables but VLM classification failed
 
-### `do_analysis.py` - Generate Statistics
+### Analysis Module (`src/analysis/`)
 
-```bash
-python scripts/do_analysis.py
-```
+Stats and threshold analysis are now in `src/analysis/` and called by `post_processing.py`.
 
-Generates PNG charts in `docs/`:
+Generated images in `docs/`:
 - `stats_pipeline.png` - Pipeline statistics
 - `stats_compensation.png` - Compensation statistics
+- `stats_top10.png` - Top 10 highest paid executives
+- `stats_breakdown.png` - Compensation breakdown by component
 - `chart_pipeline.png` - Document breakdown pie charts
 - `chart_by_year.png` - Tables by year
 - `chart_distribution.png` - Compensation distribution
 - `chart_trends.png` - Trends over time
+- `analysis_threshold.png` - Threshold optimization plot
 
-### `cleanup.py` - Remove Incomplete Documents
-
-```bash
-# Dry run - show what would be deleted
-python scripts/cleanup.py
-
-# Actually delete
-python scripts/cleanup.py --delete
-```
-
-Removes:
-- Incomplete folders (missing required files)
-- Orphan PDFs (no corresponding output folder)
-
-### `to_hf.py` - Upload to HuggingFace
-
-```bash
-# Show statistics only
-python scripts/to_hf.py
-
-# Build and push dataset
-python scripts/to_hf.py --push
-```
+Output includes:
+- `sct_probability`: Float 0-1, probability that table is a real SCT
+- Statistics on how many duplicates the classifier can disambiguate
 
 ---
 

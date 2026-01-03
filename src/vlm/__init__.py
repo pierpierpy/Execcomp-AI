@@ -16,3 +16,4 @@ from .extraction import (
     extract_summary_compensation_table,
     extract_all_summary_compensation
 )
+from .classifier import SCTClassifier

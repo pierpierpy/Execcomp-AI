@@ -9,6 +9,7 @@ from .vlm import (
     find_summary_compensation_in_doc,
     extract_summary_compensation_table,
     extract_all_summary_compensation,
+    SCTClassifier,
 )
 
 # Processing - PDF conversion, MinerU, table extraction
@@ -34,3 +35,12 @@ from .io import (
 
 # Tracking
 from .tracking import Tracker
+
+# Analysis
+from .analysis import (
+    generate_stats_images,
+    collect_pipeline_data,
+    analyze_thresholds,
+    find_optimal_threshold,
+    ThresholdAnalysisResult,
+)

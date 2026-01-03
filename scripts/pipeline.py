@@ -3,9 +3,8 @@
 Executive Compensation Extraction Pipeline
 
 Usage:
-    python scripts/pipeline.py              # Show status only
-    python scripts/pipeline.py 100          # Process up to 100 documents total
-    python scripts/pipeline.py --continue   # Continue processing pending documents
+    python scripts/pipeline.py          # Show status only
+    python scripts/pipeline.py 100       # Process up to 100 documents total
 """
 
 import asyncio
@@ -15,7 +14,7 @@ import sys
 from pathlib import Path
 
 # =============================================================================
-# CONFIGURATION
+# CONFIGURATION (edit these values directly)
 # =============================================================================
 
 SEED = 42424242
@@ -24,6 +23,9 @@ VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
 
 MINERU_MAX_CONCURRENT = 8
 DOC_MAX_CONCURRENT = 16
+
+# Set to True to process pending documents instead of adding new ones
+CONTINUE_MODE = True
 
 # =============================================================================
 # PATHS
@@ -64,17 +66,13 @@ async def main():
     tracker = Tracker(BASE_PATH)
     
     # Parse command line
-    if len(sys.argv) == 1 or sys.argv[1] == "status":
+    if len(sys.argv) == 1:
         tracker.print_stats()
         return
     
-    continue_mode = "--continue" in sys.argv
     target_size = None
-    
-    for arg in sys.argv[1:]:
-        if arg.isdigit():
-            target_size = int(arg)
-            break
+    if len(sys.argv) > 1 and sys.argv[1].isdigit():
+        target_size = int(sys.argv[1])
     
     # Create directories
     PDF_PATH.mkdir(exist_ok=True)
@@ -103,7 +101,7 @@ async def main():
     # Determine what to process
     tracked_ids = set(tracker.get_all_doc_ids())
     
-    if continue_mode:
+    if CONTINUE_MODE:
         # Continue: process pending documents (need MinerU or need classification)
         pending_mineru = set(tracker.get_pending("mineru_done"))
         pending_classify = set(tracker.get_pending("classified"))
