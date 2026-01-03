@@ -447,21 +447,28 @@ def generate_probability_stats(
             if len(high_prob) == 1:
                 could_disambiguate += 1
     
-    # --- Stats Table ---
+    # --- Stats Table with descriptions ---
+    # Build data with dynamic descriptions
+    extra_tables = total - unique_docs
+    disambiguate_pct = could_disambiguate/multi_table_docs*100 if multi_table_docs > 0 else 0
+    remaining_duplicates = multi_table_docs - could_disambiguate
+    
+    table_data = [
+        ["Total tables extracted", f"{total:,}", "Tables identified as potential SCT by VLM"],
+        ["Unique documents", f"{unique_docs:,}", f"Unique (company, year) pairs → {extra_tables:,} extra tables"],
+        ["✅ High confidence (≥0.7)", f"{high_conf:,} ({high_conf/total*100:.1f}%)", "Likely true SCT - recommended to keep"],
+        ["⚠️ Medium (0.3-0.7)", f"{medium_conf:,} ({medium_conf/total*100:.1f}%)", "Uncertain - review manually if needed"],
+        ["❌ Low confidence (<0.3)", f"{low_conf:,} ({low_conf/total*100:.1f}%)", "Likely false positives - filter these out"],
+        ["Documents with duplicates", f"{multi_table_docs:,}", f"Have >1 table classified as SCT"],
+        ["→ Can disambiguate", f"{could_disambiguate:,} ({disambiguate_pct:.1f}%)", f"Only 1 table has prob≥0.7 → {remaining_duplicates:,} remain ambiguous"],
+    ]
+    
     generated.append(create_table_image(
-        data=[
-            ["Total records (tables)", f"{total:,}"],
-            ["Unique documents (cik, year)", f"{unique_docs:,}"],
-            ["High confidence (≥0.7)", f"{high_conf:,} ({high_conf/total*100:.1f}%)"],
-            ["Medium confidence (0.3-0.7)", f"{medium_conf:,} ({medium_conf/total*100:.1f}%)"],
-            ["Low confidence (<0.3)", f"{low_conf:,} ({low_conf/total*100:.1f}%)"],
-            ["Documents with multiple tables", f"{multi_table_docs:,}"],
-            ["→ Classifier can disambiguate", f"{could_disambiguate:,} ({could_disambiguate/multi_table_docs*100:.1f}%)" if multi_table_docs > 0 else "N/A"],
-        ],
-        headers=["Metric", "Value"],
+        data=table_data,
+        headers=["Metric", "Value", "Description"],
         title=f"SCT Probability Statistics (updated {today})",
         output_path=docs_path / "stats_probability.png",
-        col_widths=[0.55, 0.35],
+        col_widths=[0.3, 0.2, 0.5],
         highlight_last=True
     ))
     

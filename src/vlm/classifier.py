@@ -66,12 +66,14 @@ class SCTClassifier:
     Binary classifier for Summary Compensation Tables.
     
     Args:
-        model_path: Path to the saved model directory (with classifier_head.safetensors)
+        model_path: Path to local model directory, or HuggingFace repo ID.
+                   If local path doesn't exist, downloads from HuggingFace.
         device: Device to run on ('cuda' or 'cpu')
         threshold: Probability threshold for is_sct classification
     """
     
-    DEFAULT_MODEL_PATH = Path(__file__).parent.parent.parent / "hf/models/exp2-weighted-loss-qwen3/full"
+    DEFAULT_LOCAL_PATH = Path(__file__).parent.parent.parent / "hf/models/exp2-weighted-loss-qwen3/full"
+    DEFAULT_HF_REPO = "pierjoe/Qwen3-VL-4B-SCT-Classifier"
     
     def __init__(
         self, 
@@ -79,11 +81,28 @@ class SCTClassifier:
         device: str = "cuda",
         threshold: float = 0.5
     ):
-        self.model_path = Path(model_path) if model_path else self.DEFAULT_MODEL_PATH
         self.device = device
         self.threshold = threshold
         self._model = None
         self._processor = None
+        
+        # Resolve model path
+        if model_path is None:
+            # Try local default first, then HuggingFace
+            if self.DEFAULT_LOCAL_PATH.exists():
+                self.model_path = self.DEFAULT_LOCAL_PATH
+                self._is_hf_repo = False
+            else:
+                self.model_path = self.DEFAULT_HF_REPO
+                self._is_hf_repo = True
+        elif isinstance(model_path, Path) or (isinstance(model_path, str) and "/" not in model_path):
+            # Local path
+            self.model_path = Path(model_path)
+            self._is_hf_repo = False
+        else:
+            # HuggingFace repo ID (contains /)
+            self.model_path = model_path
+            self._is_hf_repo = True
         
     def _load_model(self):
         """Lazy load model on first use."""
@@ -94,17 +113,34 @@ class SCTClassifier:
         from safetensors.torch import load_file
         import json
         
+        if self._is_hf_repo:
+            print(f"Loading SCT Classifier from HuggingFace: {self.model_path}...")
+            from huggingface_hub import hf_hub_download, snapshot_download
+            
+            # Download the entire model
+            local_dir = snapshot_download(
+                repo_id=self.model_path,
+                local_dir=self.DEFAULT_LOCAL_PATH.parent / self.model_path.replace("/", "_")
+            )
+            model_path = Path(local_dir)
+        else:
+            if not self.model_path.exists():
+                raise FileNotFoundError(
+                    f"Local model not found at {self.model_path}. "
+                    f"Either provide a valid path or use HuggingFace repo: {self.DEFAULT_HF_REPO}"
+                )
+            print(f"Loading SCT Classifier from local: {self.model_path}...")
+            model_path = self.model_path
+        
         # Load config
-        config_path = self.model_path / "classifier_config.json"
+        config_path = model_path / "classifier_config.json"
         with open(config_path) as f:
             config = json.load(f)
         
-        print(f"Loading SCT Classifier from {self.model_path}...")
-        
         # Load processor and base model
-        self._processor = AutoProcessor.from_pretrained(str(self.model_path))
+        self._processor = AutoProcessor.from_pretrained(str(model_path))
         base_model = AutoModelForVision2Seq.from_pretrained(
-            str(self.model_path),
+            str(model_path),
             torch_dtype=torch.bfloat16,
             device_map=self.device
         )
@@ -116,7 +152,7 @@ class SCTClassifier:
             num_labels=config["num_labels"]
         ).to(self.device)
         
-        head_path = self.model_path / "classifier_head.safetensors"
+        head_path = model_path / "classifier_head.safetensors"
         self._model.classifier.load_state_dict(load_file(head_path))
         self._model.eval()
         

@@ -125,8 +125,9 @@ By status:
 By phase completed:
   [1] PDF created:     8,015
   [2] MinerU done:     8,015
-  [3] Classified:      6,108
-  [4] Extracted:       6,538
+  [3] VLM processed:   6,538
+      → Found SCT:     6,108
+      → No SCT:        430
 ==================================================
 ```
 

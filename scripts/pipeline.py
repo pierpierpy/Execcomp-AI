@@ -25,7 +25,11 @@ MINERU_MAX_CONCURRENT = 8
 DOC_MAX_CONCURRENT = 16
 
 # Set to True to process pending documents instead of adding new ones
-CONTINUE_MODE = True
+CONTINUE_MODE = False
+
+# Filter by years (empty list = all years)
+# Examples: [2020, 2021, 2022] or range(2015, 2023)
+YEARS_FILTER = [2020]  # e.g., [2020, 2021] or list(range(2005, 2010))
 
 # =============================================================================
 # PATHS
@@ -97,6 +101,13 @@ async def main():
     
     # Build doc_id -> doc mapping
     doc_id_to_doc = {get_doc_id(doc): doc for doc in all_docs}
+    
+    # Filter by years if specified
+    if YEARS_FILTER:
+        years_set = set(YEARS_FILTER)
+        before_filter = len(doc_id_to_doc)
+        doc_id_to_doc = {k: v for k, v in doc_id_to_doc.items() if v.get('year') in years_set}
+        print(f"\n[YEAR FILTER] {before_filter:,} → {len(doc_id_to_doc):,} documents (years: {sorted(years_set)})")
     
     # Determine what to process
     tracked_ids = set(tracker.get_all_doc_ids())
@@ -173,10 +184,21 @@ async def main():
     print("\n[3/6] Processing PDFs with MinerU...")
     
     # Get docs that need MinerU (non-funds without mineru_done)
-    need_mineru = [d for d in doc_ids_to_process 
-                   if not tracker.has_phase(d, "mineru_done")
-                   and tracker.get_document(d) 
-                   and tracker.get_document(d).get("sic") not in ("NULL", None)]
+    funds_skipped = []
+    need_mineru = []
+    for d in doc_ids_to_process:
+        doc = tracker.get_document(d)
+        if not doc:
+            continue
+        if tracker.has_phase(d, "mineru_done"):
+            continue
+        if doc.get("sic") in ("NULL", None):
+            funds_skipped.append(d)
+        else:
+            need_mineru.append(d)
+    
+    if funds_skipped:
+        print(f"  Skipping {len(funds_skipped)} funds (no executive compensation)")
     
     if need_mineru:
         failed, success = process_pdfs_with_mineru(
