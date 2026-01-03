@@ -39,18 +39,23 @@ SEC Filing → PDF → MinerU → Table Classification → JSON Extraction
 ```
 stuff/
 ├── scripts/
-│   ├── pipeline.py      # Main extraction pipeline
-│   └── to_hf.py         # HuggingFace upload script
+│   ├── pipeline.py       # Main extraction pipeline
+│   ├── do_analysis.py    # Generate stats and charts
+│   ├── fix_pending.py    # Find and fix pending documents
+│   ├── cleanup.py        # Remove incomplete documents
+│   └── to_hf.py          # HuggingFace upload script
 ├── src/
-│   ├── vlm/             # VLM classification & extraction
-│   ├── io/              # Results saving & loading
-│   ├── mineru/          # PDF parsing with MinerU
-│   └── download/        # SEC EDGAR downloader
+│   ├── vlm/              # VLM classification & extraction
+│   ├── processing/       # PDF conversion, MinerU, table extraction
+│   ├── io/               # Results saving & visualization
+│   └── tracking/         # Pipeline tracker (central status)
 ├── notebooks/
-│   └── pipeline.ipynb   # Interactive development
+│   └── pipeline.ipynb    # Interactive development
 ├── data/
-│   └── DEF14A_all.jsonl # Filing metadata (local)
-└── output/              # Processed results
+│   └── DEF14A_all.jsonl  # Filing metadata (local)
+├── pipeline_tracker.json # Central tracking file
+├── output/               # Processed results per document
+└── pdfs/                 # Downloaded PDF files
 ```
 
 ---
@@ -61,32 +66,176 @@ stuff/
 
 ```bash
 # GPU 0,1: Qwen3-VL for classification/extraction
-CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qwen3-VL-32B-Instruct --tensor-parallel-size 2 --port 8000 --max-model-len 32768
+CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qwen3-VL-32B-Instruct \
+    --tensor-parallel-size 2 --port 8000 --max-model-len 32768
 
 # GPU 2,3: MinerU for PDF processing  
-CUDA_VISIBLE_DEVICES=2,3 mineru-openai-server --engine vllm --port 30000 --tensor-parallel-size 2
+CUDA_VISIBLE_DEVICES=2,3 mineru-openai-server \
+    --engine vllm --port 30000 --tensor-parallel-size 2
 ```
 
 ### 2. Run Pipeline
 
-**Option A: Command line**
+```bash
+# Show current status
+python scripts/pipeline.py
+
+# Process up to 1000 documents total
+python scripts/pipeline.py 1000
+
+# Continue processing pending documents
+python scripts/pipeline.py --continue
+```
+
+### 3. Check Status
+
 ```bash
 python scripts/pipeline.py
 ```
 
-**Option B: Notebook**
-Open `notebooks/pipeline.ipynb` and run cells in order.
+Output:
+```
+==================================================
+PIPELINE TRACKER STATUS
+==================================================
+Total documents: 8,015
 
-### 3. Check Output
+By status:
+  Complete (with SCT): 6,108
+  No SCT found:        430
+  Funds (skipped):     1,477
+  Pending:             0
+
+By phase completed:
+  [1] PDF created:     8,015
+  [2] MinerU done:     8,015
+  [3] Classified:      6,108
+  [4] Extracted:       6,538
+==================================================
+```
+
+---
+
+## 🔧 Scripts Reference
+
+### `pipeline.py` - Main Pipeline
+
+```bash
+# Show status only
+python scripts/pipeline.py
+
+# Process N documents total (adds new if needed)
+python scripts/pipeline.py 10000
+
+# Continue processing pending documents
+python scripts/pipeline.py --continue
+```
+
+The pipeline tracks all documents in `pipeline_tracker.json`:
+- **Phases**: `pdf_created` → `mineru_done` → `classified` → `extracted`
+- **Status**: `complete`, `no_sct`, `fund`, `pending`
+
+### `fix_pending.py` - Fix Failed Documents
+
+```bash
+# Show pending documents
+python scripts/fix_pending.py
+
+# Delete and reprocess pending
+python scripts/fix_pending.py --fix
+```
+
+Categories:
+- **No PDF**: HTML download failed
+- **No MinerU**: MinerU processing failed  
+- **Not classified**: Has tables but VLM classification failed
+
+### `do_analysis.py` - Generate Statistics
+
+```bash
+python scripts/do_analysis.py
+```
+
+Generates PNG charts in `docs/`:
+- `stats_pipeline.png` - Pipeline statistics
+- `stats_compensation.png` - Compensation statistics
+- `chart_pipeline.png` - Document breakdown pie charts
+- `chart_by_year.png` - Tables by year
+- `chart_distribution.png` - Compensation distribution
+- `chart_trends.png` - Trends over time
+
+### `cleanup.py` - Remove Incomplete Documents
+
+```bash
+# Dry run - show what would be deleted
+python scripts/cleanup.py
+
+# Actually delete
+python scripts/cleanup.py --delete
+```
+
+Removes:
+- Incomplete folders (missing required files)
+- Orphan PDFs (no corresponding output folder)
+
+### `to_hf.py` - Upload to HuggingFace
+
+```bash
+# Show statistics only
+python scripts/to_hf.py
+
+# Build and push dataset
+python scripts/to_hf.py --push
+```
+
+---
+
+## 📊 Central Tracker
+
+All pipeline status is stored in `pipeline_tracker.json`:
+
+```json
+{
+  "last_updated": "2026-01-03T12:00:00",
+  "documents": {
+    "1002037_2016_0001437749-16-024320": {
+      "cik": "1002037",
+      "company_name": "ACME Corp",
+      "year": 2016,
+      "sic": "1234",
+      "phases": {
+        "pdf_created": "2026-01-01T10:00:00",
+        "mineru_done": "2026-01-01T10:05:00",
+        "classified": "2026-01-02T15:30:00",
+        "extracted": "2026-01-02T15:31:00"
+      },
+      "status": "complete",
+      "sct_tables": ["images/table_15.jpg"]
+    }
+  }
+}
+```
+
+To rebuild tracker from files:
+```python
+from src.tracking import Tracker
+tracker = Tracker()
+tracker.rebuild_from_files()
+```
+
+---
+
+## 📂 Output Structure
 
 ```
 output/{cik}_{year}_{accession}/
-├── extraction_results.json     # ✅ Main output
-├── classification_results.json # Table classifications
 ├── metadata.json               # Document metadata
-├── content_list.json           # MinerU parse results
-├── images/                     # Extracted page images
-└── tables/                     # Extracted table images
+├── extraction_results.json     # ✅ Extracted compensation data
+├── classification_results.json # Table classifications
+├── no_sct_found.json          # (if no SCT found)
+└── {doc_id}/
+    ├── *_content_list.json    # MinerU parse results
+    └── vlm/                    # Table images
 ```
 
 ---
@@ -96,54 +245,40 @@ output/{cik}_{year}_{accession}/
 Edit variables at the top of `scripts/pipeline.py`:
 
 ```python
-# Data source
-HF_DATASET = "pierjoe/SEC-DEF14A-2005-2022"  # HuggingFace dataset
-LOCAL_DATASET = "data/DEF14A_all.jsonl"       # Local file (priority)
+SEED = 42424242                   # Random seed for reproducibility
+VLM_BASE_URL = "http://localhost:8000/v1"
+VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
 
-# Processing limits
-LIMIT = 10                        # Max documents to process (None = all)
-YEARS = list(range(2005, 2023))   # Years to include
-
-# Parallelization
-DOC_MAX_CONCURRENT = 4            # Concurrent documents
-
-# Reprocessing behavior
-DONT_SKIP = False                 # Set True to force reprocess all
+MINERU_MAX_CONCURRENT = 8         # Concurrent MinerU processes
+DOC_MAX_CONCURRENT = 16           # Concurrent document processing
 ```
-
-### Parallelization Levels
-
-| Level | Config | Default | File |
-|-------|--------|---------|------|
-| Documents | `DOC_MAX_CONCURRENT` | 4 | `scripts/pipeline.py` |
-| Classification | `CLASSIFY_MAX_CONCURRENT` | 8 | `src/vlm/classification.py` |
-| Extraction | `EXTRACT_MAX_CONCURRENT` | 4 | `src/vlm/extraction.py` |
-
-### Skip Logic
-
-Documents are automatically skipped if:
-- `extraction_results.json` exists → already processed with SCT
-- `no_sct_found.json` exists → previously determined no SCT
-
-Set `DONT_SKIP = True` to force reprocessing all documents.
 
 ---
 
-## 📤 Upload to HuggingFace
+## Key Features
 
-After processing, upload results to HuggingFace:
+| Challenge | Solution |
+|-----------|----------|
+| Tables split across pages | Merge based on `is_header_only` flag + bbox proximity |
+| Pre-2006 vs Post-2006 formats | Column mapping with synonyms |
+| Funds (no exec comp) | Auto-skip when SIC = NULL |
+| Resume after interruption | Central tracker + skip processed docs |
+| Parallel processing | 3-level: MinerU, classification, extraction |
+| Status tracking | `pipeline_tracker.json` as single source of truth |
+
+---
+
+## Requirements
+
+- Python 3.10+
+- GPU with 40GB+ VRAM (or adjust tensor parallelism)
 
 ```bash
-# Build and push dataset
-python scripts/to_hf.py --push
+pip install -r requirements.txt
+sudo apt-get install wkhtmltopdf
 ```
 
-This will:
-1. Scan all `output/*/extraction_results.json` files
-2. Build a HuggingFace Dataset with all extracted data
-3. Push to `pierjoe/execcomp-ai` repository
-
-Without `--push`, it only shows statistics without uploading.
+Key dependencies: `vllm`, `openai`, `aiohttp`, `datasets`, `huggingface_hub`, `pdfkit`
 
 ---
 
@@ -171,32 +306,6 @@ Without `--push`, it only shows statistics without uploading.
     "total": 3121716
 }
 ```
-
----
-
-## Key Features
-
-| Challenge | Solution |
-|-----------|----------|
-| Tables split across pages | Merge based on `is_header_only` flag + bbox proximity |
-| Pre-2006 vs Post-2006 formats | Column mapping with synonyms |
-| Funds (no exec comp) | Auto-skip when SIC = NULL |
-| Resume after interruption | Skip docs with existing results |
-| Slow processing | 3-level parallelization |
-
----
-
-## Requirements
-
-- Python 3.10+
-- GPU with 40GB+ VRAM (or adjust tensor parallelism)
-
-```bash
-pip install -r requirements.txt
-sudo apt-get install wkhtmltopdf
-```
-
-Key dependencies: `vllm`, `openai`, `aiohttp`, `datasets`, `huggingface_hub`
 
 ---
 
