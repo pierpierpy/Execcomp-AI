@@ -3,8 +3,9 @@
 Executive Compensation Extraction Pipeline
 
 Usage:
-    python scripts/pipeline.py          # Process all 150 documents
-    python scripts/pipeline.py 10       # Process only 10 documents
+    python scripts/pipeline.py              # Show status only
+    python scripts/pipeline.py 100          # Process up to 100 documents total
+    python scripts/pipeline.py --continue   # Continue processing pending documents
 """
 
 import asyncio
@@ -13,58 +14,37 @@ import random
 import sys
 from pathlib import Path
 
-# per vedere quali sono state mergiate
-
-# i documenti possono essere di 3 tipi
-# possono essere fondi -> non hanno SCT
-# possono avere SCT
-# possono non avere SCT
-
 # =============================================================================
-# CONFIGURATION - MODIFY THESE VALUES AS NEEDED
+# CONFIGURATION
 # =============================================================================
 
 SEED = 42424242
-SAMPLE_SIZE = 150  # Default, can be overridden by command line arg
-DONT_SKIP = False  # If True, reprocess documents even if they have no_sct_found.json
-
 VLM_BASE_URL = "http://localhost:8000/v1"
 VLM_MODEL = "Qwen/Qwen3-VL-32B-Instruct"
 
 MINERU_MAX_CONCURRENT = 8
-DOC_MAX_CONCURRENT = 16  # Max concurrent document processing (classification + extraction)
+DOC_MAX_CONCURRENT = 16
 
 # =============================================================================
 # PATHS
 # =============================================================================
 
-BASE_PATH = Path(__file__).parent.parent.resolve()  # Go up from scripts/ to project root
+BASE_PATH = Path(__file__).parent.parent.resolve()
 PDF_PATH = BASE_PATH / "pdfs"
 OUTPUT_PATH = BASE_PATH / "output"
-DATA_PATH = BASE_PATH / "data/DEF14A_all.jsonl"  # Local file (optional)
-HF_DATASET = "pierjoe/SEC-DEF14A-2005-2022"  # HuggingFace dataset
+DATA_PATH = BASE_PATH / "data/DEF14A_all.jsonl"
+HF_DATASET = "pierjoe/SEC-DEF14A-2005-2022"
 
 # =============================================================================
 # MAIN PIPELINE
 # =============================================================================
 
 async def main():
-    # Parse command line arg for sample size
-    sample_size = SAMPLE_SIZE
-    if len(sys.argv) > 1:
-        try:
-            sample_size = int(sys.argv[1])
-            print(f"Using sample size from command line: {sample_size}")
-        except ValueError:
-            print(f"Invalid sample size '{sys.argv[1]}', using default {SAMPLE_SIZE}")
-    
     # Imports
+    sys.path.insert(0, str(BASE_PATH))
     from datasets import load_dataset
     from openai import AsyncOpenAI
     from tqdm import tqdm
-    
-    # Add project root to path for src imports
-    sys.path.insert(0, str(BASE_PATH))
     from src import (
         get_doc_id,
         convert_docs_to_pdf,
@@ -77,7 +57,24 @@ async def main():
         save_extraction_results,
         save_no_sct_results,
         fix_all_orphan_images,
+        Tracker,
     )
+    
+    # Initialize tracker
+    tracker = Tracker(BASE_PATH)
+    
+    # Parse command line
+    if len(sys.argv) == 1 or sys.argv[1] == "status":
+        tracker.print_stats()
+        return
+    
+    continue_mode = "--continue" in sys.argv
+    target_size = None
+    
+    for arg in sys.argv[1:]:
+        if arg.isdigit():
+            target_size = int(arg)
+            break
     
     # Create directories
     PDF_PATH.mkdir(exist_ok=True)
@@ -86,74 +83,128 @@ async def main():
     print("="*60)
     print("EXECUTIVE COMPENSATION EXTRACTION PIPELINE")
     print("="*60)
-    print(f"Base path: {BASE_PATH}")
-    print(f"Sample size: {sample_size}")
-    print(f"VLM: {VLM_MODEL}")
-    print("="*60)
+    
+    # Show current status
+    tracker.print_stats()
     
     # Load dataset
     print("\n[1/6] Loading dataset...")
     if DATA_PATH.exists():
         dataset = load_dataset("json", data_files=str(DATA_PATH))
         all_docs = dataset["train"]
-        print(f"✓ Loaded from local file: {DATA_PATH}")
+        print(f"✓ Loaded from local file")
     else:
         all_docs = load_dataset(HF_DATASET, split="train")
-        print(f"✓ Loaded from HuggingFace: {HF_DATASET}")
+        print(f"✓ Loaded from HuggingFace")
     
-    # Build doc_id -> index mapping
-    doc_id_to_idx = {}
-    for i, doc in enumerate(all_docs):
-        doc_id_to_idx[get_doc_id(doc)] = i
+    # Build doc_id -> doc mapping
+    doc_id_to_doc = {get_doc_id(doc): doc for doc in all_docs}
     
-    # Find already processed documents (have content_list.json from MinerU)
-    already_processed_ids = set()
-    for folder in OUTPUT_PATH.iterdir():
-        if folder.is_dir() and list(folder.rglob("*_content_list.json")):
-            already_processed_ids.add(folder.name)
+    # Determine what to process
+    tracked_ids = set(tracker.get_all_doc_ids())
     
-    # Filter to only those that exist in dataset
-    processed_indices = [doc_id_to_idx[doc_id] for doc_id in already_processed_ids if doc_id in doc_id_to_idx]
-    print(f"✓ Found {len(processed_indices)} already processed documents")
-    
-    # If we need more, add from remaining (shuffled with seed)
-    remaining_indices = [i for i in range(len(all_docs)) if i not in set(processed_indices)]
-    random.seed(SEED)
-    random.shuffle(remaining_indices)
-    
-    # Take processed + as many new as needed to reach sample_size
-    if len(processed_indices) >= sample_size:
-        indices = processed_indices[:sample_size]
-        print(f"✓ Using {len(indices)} from already processed")
+    if continue_mode:
+        # Continue: process pending documents (need MinerU or need classification)
+        pending_mineru = set(tracker.get_pending("mineru_done"))
+        pending_classify = set(tracker.get_pending("classified"))
+        doc_ids_to_process = list(pending_mineru | pending_classify)
+        print(f"\n[CONTINUE MODE] Processing {len(doc_ids_to_process)} pending documents")
+    elif target_size:
+        # Target size: keep all tracked + add new ones to reach target
+        if target_size <= len(tracked_ids):
+            print(f"\n✓ Already have {len(tracked_ids)} documents, target is {target_size}")
+            doc_ids_to_process = []
+        else:
+            # Add new documents
+            new_needed = target_size - len(tracked_ids)
+            all_doc_ids = list(doc_id_to_doc.keys())
+            untracked = [d for d in all_doc_ids if d not in tracked_ids]
+            random.seed(SEED)
+            random.shuffle(untracked)
+            new_doc_ids = untracked[:new_needed]
+            doc_ids_to_process = new_doc_ids
+            print(f"\n[NEW DOCS] Adding {len(new_doc_ids)} new documents (target: {target_size})")
     else:
-        needed = sample_size - len(processed_indices)
-        indices = processed_indices + remaining_indices[:needed]
-        print(f"✓ Using {len(processed_indices)} processed + {min(needed, len(remaining_indices))} new")
+        doc_ids_to_process = []
     
-    docs = all_docs.select(indices)
-    print(f"✓ Total sample: {len(docs)} documents")
+    if not doc_ids_to_process:
+        print("\nNothing to process.")
+        return
     
-    # Get doc_ids for this sample
-    doc_ids = [get_doc_id(doc) for doc in docs]
+    # Get docs to process
+    docs_to_process = [doc_id_to_doc[d] for d in doc_ids_to_process if d in doc_id_to_doc]
     
     # Initialize VLM client
     client = AsyncOpenAI(base_url=VLM_BASE_URL, api_key="dummy")
     
-    # Step 1: Convert HTML to PDF
+    # =========================================================================
+    # PHASE 1: Convert HTML to PDF
+    # =========================================================================
     print("\n[2/6] Converting HTML to PDF...")
-    convert_docs_to_pdf(docs, base_path=BASE_PATH)
+    convert_docs_to_pdf(docs_to_process, base_path=BASE_PATH)
     
-    # Step 2: Process PDFs with MinerU (only for this sample)
+    # Update tracker for new documents
+    for doc in docs_to_process:
+        doc_id = get_doc_id(doc)
+        output_dir = OUTPUT_PATH / doc_id
+        meta_path = output_dir / "metadata.json"
+        pdf_path = PDF_PATH / f"{doc_id}.pdf"
+        
+        # If PDF exists but output folder doesn't, recreate it
+        if pdf_path.exists() and not output_dir.exists():
+            output_dir.mkdir(parents=True, exist_ok=True)
+            # Create metadata
+            text_fields = {'text'}
+            metadata = {k: v for k, v in doc.items() if k not in text_fields}
+            with open(meta_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+        
+        if meta_path.exists():
+            with open(meta_path) as f:
+                meta = json.load(f)
+            tracker.add_document(doc_id, meta)
+            tracker.set_phase(doc_id, "pdf_created")
+            # Mark funds immediately
+            if meta.get("sic") in ("NULL", None):
+                tracker.set_status(doc_id, "fund")
+    tracker.save()
+    
+    # =========================================================================
+    # PHASE 2: MinerU Processing
+    # =========================================================================
     print("\n[3/6] Processing PDFs with MinerU...")
-    failed, success = process_pdfs_with_mineru(base_path=BASE_PATH, max_concurrent=MINERU_MAX_CONCURRENT, doc_ids=doc_ids)
-    print(f"✓ MinerU: {len(success)} successful, {len(failed)} failed")
     
-    # Step 3: Fix orphan images
+    # Get docs that need MinerU (non-funds without mineru_done)
+    need_mineru = [d for d in doc_ids_to_process 
+                   if not tracker.has_phase(d, "mineru_done")
+                   and tracker.get_document(d) 
+                   and tracker.get_document(d).get("sic") not in ("NULL", None)]
+    
+    if need_mineru:
+        failed, success = process_pdfs_with_mineru(
+            base_path=BASE_PATH, 
+            max_concurrent=MINERU_MAX_CONCURRENT, 
+            doc_ids=need_mineru
+        )
+        
+        # Update tracker
+        for doc_id in success:
+            tracker.set_phase(doc_id, "mineru_done")
+        tracker.save()
+        print(f"✓ MinerU: {len(success)} successful, {len(failed)} failed")
+    else:
+        print("✓ No documents need MinerU processing")
+    
+    # =========================================================================
+    # PHASE 3: Fix orphan images
+    # =========================================================================
     print("\n[4/6] Fixing orphan images...")
     fix_stats = fix_all_orphan_images(OUTPUT_PATH)
     print(f"✓ Fixed {fix_stats['total_fixed']} tables in {fix_stats['docs_fixed']} documents")
     
-    # Step 4: Extract tables
+    # =========================================================================
+    # PHASE 4: Extract tables
+    # =========================================================================
     print("\n[5/6] Extracting tables from MinerU output...")
     all_tables, extraction_stats = extract_tables_from_output(
         output_path=OUTPUT_PATH, 
@@ -161,67 +212,48 @@ async def main():
     )
     print(f"✓ Extracted {len(all_tables)} tables from {len(extraction_stats['with_tables'])} documents")
     
-    # Mark documents with 0 tables as no_sct_found (if non-fund and not already processed)
-    for doc_name in extraction_stats.get('no_tables', []):
-        doc_dir = OUTPUT_PATH / doc_name
-        metadata_path = doc_dir / "metadata.json"
-        if not metadata_path.exists():
-            continue
-        with open(metadata_path) as f:
-            meta = json.load(f)
-        # Skip funds
-        if meta.get("sic") in ("NULL", None):
-            continue
-        # Skip if already has results
-        if (doc_dir / "extraction_results.json").exists():
-            continue
-        if (doc_dir / "no_sct_found.json").exists():
-            continue
-        # Mark as no SCT (no tables from MinerU)
-        save_no_sct_results(doc_dir, metadata=meta)
-    
-    # Step 5: Classify and extract compensation data
+    # =========================================================================
+    # PHASE 5: Classification + Extraction
+    # =========================================================================
     print("\n[6/6] Classifying tables and extracting compensation data...")
-    doc_sources = list(set(t.get('source_doc') for t in all_tables))
     
-    stats = {"processed": 0, "skipped_fund": 0, "skipped_done": 0, "no_tables": 0, "errors": 0}
+    # Get docs that need classification (have MinerU, not fund, not done)
+    need_classify = []
+    for doc_id in doc_ids_to_process:
+        doc_info = tracker.get_document(doc_id)
+        if not doc_info:
+            continue
+        if doc_info.get("sic") in ("NULL", None):
+            continue  # Fund
+        if not tracker.has_phase(doc_id, "mineru_done"):
+            continue  # No MinerU yet
+        if tracker.has_phase(doc_id, "extracted"):
+            continue  # Already done
+        need_classify.append(doc_id)
+    
+    # Also include docs with tables from extraction_stats
+    doc_sources_with_tables = set(t.get('source_doc') for t in all_tables)
+    need_classify = [d for d in need_classify if d in doc_sources_with_tables]
+    
+    print(f"Documents to classify: {len(need_classify)}")
+    
+    stats = {"processed": 0, "no_sct": 0, "errors": 0}
     stats_lock = asyncio.Lock()
-    
-    # Semaphore to limit concurrent document processing
     doc_semaphore = asyncio.Semaphore(DOC_MAX_CONCURRENT)
     
-    async def process_document(source_doc: str):
+    async def process_document(doc_id: str):
         """Process a single document: classify tables, merge, extract data."""
-        # Load metadata
-        metadata_path = OUTPUT_PATH / source_doc / "metadata.json"
-        if not metadata_path.exists():
+        meta_path = OUTPUT_PATH / doc_id / "metadata.json"
+        if not meta_path.exists():
             return
-        with open(metadata_path) as f:
+        with open(meta_path) as f:
             meta = json.load(f)
         
-        # Skip funds (no SIC code)
-        if meta.get("sic") in ("NULL", None):
-            async with stats_lock:
-                stats["skipped_fund"] += 1
-            return
-        
-        # Skip if already processed
-        if (OUTPUT_PATH / source_doc / "extraction_results.json").exists():
-            async with stats_lock:
-                stats["skipped_done"] += 1
-            return
-        
-        # Skip if already marked as no SCT (unless DONT_SKIP is True)
-        if not DONT_SKIP and (OUTPUT_PATH / source_doc / "no_sct_found.json").exists():
-            async with stats_lock:
-                stats["skipped_done"] += 1
-            return
-
         async with doc_semaphore:
             try:
                 # Classify tables
                 found, all_classifications = await find_summary_compensation_in_doc(
-                    doc_source=source_doc,
+                    doc_source=doc_id,
                     all_tables=all_tables,
                     client=client,
                     model=VLM_MODEL,
@@ -230,13 +262,15 @@ async def main():
                 )
                 
                 if not found:
-                    # Save marker indicating no SCT was found
-                    save_no_sct_results(OUTPUT_PATH / source_doc, metadata=meta)
+                    save_no_sct_results(OUTPUT_PATH / doc_id, metadata=meta)
+                    tracker.set_phase(doc_id, "extracted")
+                    tracker.set_status(doc_id, "no_sct")
                     async with stats_lock:
-                        stats["no_tables"] += 1
+                        stats["no_sct"] += 1
                     return
                 
-                images_base_dir = OUTPUT_PATH / source_doc / source_doc / "vlm"
+                # Merge consecutive tables
+                images_base_dir = OUTPUT_PATH / doc_id / doc_id / "vlm"
                 found = merge_consecutive_tables(found, images_base_dir, all_tables, all_classifications, debug=False)
                 
                 # Extract compensation data
@@ -250,73 +284,69 @@ async def main():
                 )
                 
                 # Save results
-                save_classification_results(found, OUTPUT_PATH / source_doc, metadata=meta)
-                save_extraction_results(extracted, OUTPUT_PATH / source_doc, metadata=meta)
+                save_classification_results(found, OUTPUT_PATH / doc_id, metadata=meta)
+                save_extraction_results(extracted, OUTPUT_PATH / doc_id, metadata=meta)
+                
+                # Update tracker
+                sct_paths = []
+                for f in found:
+                    # Try different possible locations for image path
+                    if "image_path" in f:
+                        sct_paths.append(f["image_path"])
+                    elif "table" in f and "img_path" in f["table"]:
+                        sct_paths.append(f["table"]["img_path"])
+                    elif "img_path" in f:
+                        sct_paths.append(f["img_path"])
+                
+                tracker.set_phase(doc_id, "classified")
+                tracker.set_phase(doc_id, "extracted")
+                tracker.set_status(doc_id, "complete")
+                tracker.set_sct_tables(doc_id, sct_paths)
+                
                 async with stats_lock:
                     stats["processed"] += 1
                 
             except Exception as e:
                 async with stats_lock:
                     stats["errors"] += 1
-                tqdm.write(f"✗ Error {source_doc}: {e}")
+                tqdm.write(f"✗ Error {doc_id}: {e}")
     
-    # Process all documents concurrently with progress bar
-    tasks = [process_document(doc) for doc in doc_sources]
-    for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Processing"):
-        await coro
+    # Process documents
+    if need_classify:
+        tasks = [process_document(doc_id) for doc_id in need_classify]
+        for coro in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Processing"):
+            await coro
+        tracker.save()
     
-    # Count totals in output folder
-    total_docs = 0
-    total_funds = 0
-    total_with_sct = 0
-    total_no_sct = 0
-    total_tables = 0
-    total_pending = 0  # Docs without results yet
-    
-    for d in OUTPUT_PATH.iterdir():
-        if not d.is_dir():
+    # Also mark docs with no tables as no_sct
+    for doc_id in doc_ids_to_process:
+        doc_info = tracker.get_document(doc_id)
+        if not doc_info:
             continue
-        total_docs += 1
-        
-        # Check if fund
-        meta_path = d / "metadata.json"
-        if meta_path.exists():
-            with open(meta_path) as f:
-                meta = json.load(f)
-            if meta.get("sic") in ("NULL", None):
-                total_funds += 1
-                continue  # Funds don't count for SCT stats
-        
-        # Count SCT status (only for non-funds)
-        if (d / "extraction_results.json").exists():
-            total_with_sct += 1
-            # Count tables in this doc
-            class_path = d / "classification_results.json"
-            if class_path.exists():
-                with open(class_path) as f:
-                    classification = json.load(f)
-                total_tables += len(classification.get("tables", []))
-        elif (d / "no_sct_found.json").exists():
-            total_no_sct += 1
-        else:
-            total_pending += 1  # Has metadata but no results yet
+        if doc_info.get("sic") in ("NULL", None):
+            continue  # Fund
+        if tracker.has_phase(doc_id, "extracted"):
+            continue  # Already done
+        if tracker.has_phase(doc_id, "mineru_done") and doc_id not in doc_sources_with_tables:
+            # Has MinerU but no tables extracted
+            meta_path = OUTPUT_PATH / doc_id / "metadata.json"
+            if meta_path.exists():
+                with open(meta_path) as f:
+                    meta = json.load(f)
+                save_no_sct_results(OUTPUT_PATH / doc_id, metadata=meta)
+                tracker.set_phase(doc_id, "extracted")
+                tracker.set_status(doc_id, "no_sct")
+    tracker.save()
     
-    duplicates = total_tables - total_with_sct  # Docs with multiple tables
-    
-    # Print summary
+    # =========================================================================
+    # FINAL STATUS
+    # =========================================================================
     print("\n" + "="*60)
     print("PIPELINE COMPLETE")
     print("="*60)
-    print(f"Processed:      {stats['processed']} (this run)")
-    print(f"Total docs:     {total_docs} (in output)")
-    print(f"  Funds:        {total_funds}")
-    print(f"  Non-funds:    {total_docs - total_funds}")
-    print(f"    With SCT:   {total_with_sct} ({total_tables} tables, {duplicates} extra)")
-    print(f"    No SCT:     {total_no_sct}")
-    if total_pending > 0:
-        print(f"    Pending:    {total_pending}")
-    print(f"Errors:         {stats['errors']}")
-    print("="*60)
+    print(f"This run: {stats['processed']} with SCT, {stats['no_sct']} no SCT, {stats['errors']} errors")
+    print()
+    tracker.print_stats()
 
 
 if __name__ == "__main__":

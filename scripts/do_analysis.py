@@ -10,6 +10,7 @@ Usage:
 """
 
 import json
+import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -24,6 +25,10 @@ BASE_PATH = Path(__file__).parent.parent.resolve()
 OUTPUT_PATH = BASE_PATH / "output"
 DOCS_PATH = BASE_PATH / "docs"
 DOCS_PATH.mkdir(exist_ok=True)
+
+# Add src to path for tracker
+sys.path.insert(0, str(BASE_PATH))
+from src.tracking import Tracker
 
 # Style
 plt.style.use('seaborn-v0_8-whitegrid')
@@ -98,38 +103,24 @@ def main():
     print("=" * 60)
     
     # =========================================================================
-    # 1. Collect Pipeline Statistics
+    # 1. Collect Pipeline Statistics from Tracker
     # =========================================================================
-    print("\n[1/4] Collecting pipeline statistics...")
+    print("\n[1/4] Collecting pipeline statistics from tracker...")
     
-    total_docs = 0
-    funds = 0
-    with_sct = 0
-    no_sct = 0
+    tracker = Tracker(BASE_PATH)
+    stats = tracker.stats()
+    
+    total_docs = stats['total']
+    funds = stats['by_status'].get('fund', 0)
+    with_sct = stats['by_status'].get('complete', 0)
+    no_sct = stats['by_status'].get('no_sct', 0)
+    
+    # Count tables from complete documents
     total_tables = 0
-    
-    for d in OUTPUT_PATH.iterdir():
-        if not d.is_dir():
-            continue
-        total_docs += 1
-        
-        meta_path = d / "metadata.json"
-        if meta_path.exists():
-            with open(meta_path) as f:
-                meta = json.load(f)
-            if meta.get("sic") in ("NULL", None):
-                funds += 1
-                continue
-        
-        if (d / "extraction_results.json").exists():
-            with_sct += 1
-            class_path = d / "classification_results.json"
-            if class_path.exists():
-                with open(class_path) as f:
-                    classification = json.load(f)
-                total_tables += len(classification.get("tables", []))
-        elif (d / "no_sct_found.json").exists():
-            no_sct += 1
+    for doc_id in tracker.get_by_status('complete'):
+        doc_info = tracker.get_document(doc_id)
+        if doc_info:
+            total_tables += len(doc_info.get('sct_tables', []))
     
     non_funds = total_docs - funds
     multi_table = total_tables - with_sct

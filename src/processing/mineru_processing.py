@@ -89,7 +89,6 @@ def process_pdfs_with_mineru(base_path: Path = None, max_concurrent: int = DEFAU
         else:
             to_process.append(pdf)
     
-    print(f"Found {len(pdf_files)} PDFs total")
     print(f"  - Already processed (skipped): {len(skipped)}")
     print(f"  - To process: {len(to_process)}")
     
@@ -105,6 +104,15 @@ def process_pdfs_with_mineru(base_path: Path = None, max_concurrent: int = DEFAU
     failed = []
     success = []
     
+    # Include skipped docs as success (they have content_list.json)
+    for name in skipped:
+        # Remove .pdf extension to get doc_id
+        doc_id = name.replace('.pdf', '') if name.endswith('.pdf') else name
+        success.append(doc_id)
+    
+    if not to_process:
+        return failed, success
+    
     # Use more workers than semaphore allows - they'll queue up waiting for semaphore
     with ThreadPoolExecutor(max_workers=len(to_process)) as executor:
         futures = {
@@ -114,13 +122,15 @@ def process_pdfs_with_mineru(base_path: Path = None, max_concurrent: int = DEFAU
         
         for future in tqdm(as_completed(futures), total=len(to_process)):
             status, name, error = future.result()
+            # Remove .pdf extension to get doc_id
+            doc_id = name.replace('.pdf', '') if name.endswith('.pdf') else name
             if status == 'failed':
-                failed.append((name, error))
+                failed.append((doc_id, error))
             elif status == 'success':
-                success.append(name)
+                success.append(doc_id)
     
     print(f"\n=== Processing Complete ===")
-    print(f"Success: {len(success)}")
+    print(f"Success: {len(success)} (including {len(skipped)} already processed)")
     print(f"Failed: {len(failed)}")
     
     if failed:

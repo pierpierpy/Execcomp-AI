@@ -2,8 +2,8 @@
 """
 Fix Pending Documents
 
-Finds documents that are "pending" (non-fund without extraction_results.json 
-or no_sct_found.json) and re-processes them.
+Finds documents that are "pending" (non-fund without completed extraction)
+and re-processes them.
 
 Usage:
     python scripts/fix_pending.py          # Show pending docs only
@@ -20,49 +20,45 @@ BASE_PATH = Path(__file__).parent.parent.resolve()
 OUTPUT_PATH = BASE_PATH / "output"
 PDF_PATH = BASE_PATH / "pdfs"
 
+# Add src to path for tracker
+sys.path.insert(0, str(BASE_PATH))
+from src.tracking import Tracker
 
-def find_pending_docs():
-    """Find all pending documents and categorize them."""
+
+def find_pending_docs(tracker: Tracker):
+    """Find all pending documents and categorize them using the tracker."""
     no_pdf = []
     no_mineru = []
     not_classified = []
     
-    for doc_dir in OUTPUT_PATH.iterdir():
-        if not doc_dir.is_dir():
-            continue
-        
-        metadata_path = doc_dir / "metadata.json"
-        if not metadata_path.exists():
-            continue
-        
-        with open(metadata_path) as f:
-            meta = json.load(f)
-        
+    # Get all non-fund documents that aren't complete
+    for doc_id, doc_info in tracker.data["documents"].items():
         # Skip funds
-        if meta.get("sic") in ("NULL", None):
+        if doc_info.get("sic") in ("NULL", None):
             continue
         
-        # Skip if has results
-        if (doc_dir / "extraction_results.json").exists():
-            continue
-        if (doc_dir / "no_sct_found.json").exists():
+        # Skip if complete
+        status = doc_info.get("status")
+        if status in ("complete", "no_sct"):
             continue
         
-        # This is a pending doc - categorize it
-        doc_name = doc_dir.name
-        pdf_path = PDF_PATH / f"{doc_name}.pdf"
-        content_files = list(doc_dir.rglob("*_content_list.json"))
+        phases = doc_info.get("phases", {})
+        pdf_path = PDF_PATH / f"{doc_id}.pdf"
         
         if not pdf_path.exists():
-            no_pdf.append(doc_name)
-        elif not content_files:
-            no_mineru.append(doc_name)
+            no_pdf.append(doc_id)
+        elif "mineru_done" not in phases:
+            no_mineru.append(doc_id)
         else:
-            # Has content_list but no results - classification failed
-            with open(content_files[0]) as f:
-                data = json.load(f)
-            tables = [item for item in data if item.get('type') == 'table']
-            not_classified.append((doc_name, len(tables)))
+            # Has MinerU but not classified/extracted
+            # Count tables from content_list
+            content_files = list((OUTPUT_PATH / doc_id).rglob("*_content_list.json"))
+            n_tables = 0
+            if content_files:
+                with open(content_files[0]) as f:
+                    data = json.load(f)
+                n_tables = len([item for item in data if item.get('type') == 'table'])
+            not_classified.append((doc_id, n_tables))
     
     return no_pdf, no_mineru, not_classified
 
@@ -74,7 +70,11 @@ def main():
     print("PENDING DOCUMENTS ANALYSIS")
     print("=" * 60)
     
-    no_pdf, no_mineru, not_classified = find_pending_docs()
+    # Initialize tracker
+    tracker = Tracker(BASE_PATH)
+    tracker.print_stats()
+    
+    no_pdf, no_mineru, not_classified = find_pending_docs(tracker)
     total_pending = len(no_pdf) + len(no_mineru) + len(not_classified)
     
     if total_pending == 0:
@@ -120,11 +120,16 @@ def main():
         shutil.rmtree(doc_dir)
     
     print(f"\n✓ Deleted {len(all_pending)} folders")
-    print("\n🚀 Running pipeline...")
+    
+    # Rebuild tracker after deletion
+    print("\n🔄 Rebuilding tracker...")
+    tracker.rebuild_from_files()
+    
+    print("\n🚀 Running pipeline with --continue...")
     print("=" * 60)
     
-    # Run pipeline
-    subprocess.run([sys.executable, str(BASE_PATH / "scripts" / "pipeline.py")])
+    # Run pipeline in continue mode
+    subprocess.run([sys.executable, str(BASE_PATH / "scripts" / "pipeline.py"), "--continue"])
 
 
 if __name__ == "__main__":
