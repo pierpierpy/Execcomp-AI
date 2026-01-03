@@ -70,7 +70,8 @@ async def main():
     tracker = Tracker(BASE_PATH)
     
     # Parse command line
-    if len(sys.argv) == 1:
+    # No args and no year filter = just show stats
+    if len(sys.argv) == 1 and not YEARS_FILTER:
         tracker.print_stats()
         return
     
@@ -118,6 +119,12 @@ async def main():
         pending_classify = set(tracker.get_pending("classified"))
         doc_ids_to_process = list(pending_mineru | pending_classify)
         print(f"\n[CONTINUE MODE] Processing {len(doc_ids_to_process)} pending documents")
+    elif YEARS_FILTER and not target_size:
+        # Year filter without target: process ALL documents from those years
+        all_doc_ids = list(doc_id_to_doc.keys())
+        untracked = [d for d in all_doc_ids if d not in tracked_ids]
+        doc_ids_to_process = untracked
+        print(f"\n[YEAR MODE] Processing all {len(doc_ids_to_process)} untracked documents from {sorted(set(YEARS_FILTER))}")
     elif target_size:
         # Target size: keep all tracked + add new ones to reach target
         if target_size <= len(tracked_ids):
