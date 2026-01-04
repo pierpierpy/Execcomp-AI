@@ -69,10 +69,16 @@ def push_only():
     hf_dataset = load_from_disk(str(HF_LOCAL_PATH))
     print(f"✓ Dataset: {hf_dataset}")
     
-    # Push to Hub
+    # Push to Hub - each split explicitly
     print(f"\nPushing dataset to {HF_REPO}...")
-    hf_dataset.push_to_hub(HF_REPO)
-    print(f"✓ Dataset pushed")
+    if hasattr(hf_dataset, 'keys'):  # DatasetDict
+        for split_name in hf_dataset:
+            print(f"   Pushing split '{split_name}'...")
+            hf_dataset[split_name].push_to_hub(HF_REPO, split=split_name)
+        print(f"✓ All {len(hf_dataset)} splits pushed")
+    else:  # Single Dataset
+        hf_dataset.push_to_hub(HF_REPO)
+        print(f"✓ Dataset pushed")
     
     # Upload docs
     api = HfApi()
@@ -383,8 +389,11 @@ def main():
     # Push to Hub (if --push)
     if push_mode:
         print(f"\nPushing dataset to {HF_REPO}...")
-        hf_dataset.push_to_hub(HF_REPO)
-        print(f"✓ Dataset pushed")
+        # Push each split explicitly to ensure all splits are uploaded
+        for split_name in hf_dataset:
+            print(f"   Pushing split '{split_name}'...")
+            hf_dataset[split_name].push_to_hub(HF_REPO, split=split_name)
+        print(f"✓ All {len(hf_dataset)} splits pushed")
         
         # Upload docs (README + images)
         api = HfApi()
