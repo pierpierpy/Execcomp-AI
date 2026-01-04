@@ -174,9 +174,6 @@ output/{cik}_{year}_{accession}/
 
 ---
 
-<details>
-<summary><b>📖 Detailed Documentation</b> (click to expand)</summary>
-
 ## Scripts Reference
 
 ### `pipeline.py` - Main Pipeline
@@ -331,8 +328,6 @@ By phase completed:
       → No SCT:        430
 ==================================================
 ```
-
-</details>
 
 ---
 
