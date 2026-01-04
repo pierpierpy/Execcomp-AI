@@ -19,15 +19,19 @@ AI-powered pipeline to extract executive compensation data from SEC DEF 14A prox
 </details>
 
 ---
-## WHY??
-Executive compensation data from SEC filings is valuable for academic research, corporate governance analysis, and market studies. However, extracting this information at scale is surprisingly difficult:
-The data is buried in unstructured documents. DEF 14A proxy statements are filed as HTML or plain text, with compensation tables embedded among hundreds of pages of legal text, footnotes, and varying formats.
-Formats changed over time. SEC disclosure rules changed in 2006, meaning pre-2006 tables have different column names ("Securities Underlying Options" vs "Option Awards"), different structures, and often lack a Total column entirely.
-Tables break across pages. A single Summary Compensation Table often spans multiple pages, and PDF parsers extract them as separate fragments that need to be intelligently merged.
-Similar tables cause confusion. Each proxy contains multiple compensation-related tables (director compensation, equity grants, pension benefits) that look similar to the Summary Compensation Table but contain different data.
-No clean dataset exists. While services like ExecuComp provide curated data, they are expensive and limited in coverage. Raw SEC filings are free but require significant processing.
-This project automates the entire extraction pipeline using vision-language models, producing structured JSON from raw filings with minimal manual intervention.
+## Why This Project?
 
+Executive compensation data from SEC filings is valuable for academic research, corporate governance analysis, and market studies. However, extracting this information at scale is surprisingly difficult:
+
+| Challenge | Description |
+|-----------|-------------|
+| **Unstructured documents** | DEF 14A proxy statements are filed as HTML or plain text, with compensation tables embedded among hundreds of pages of legal text, footnotes, and varying formats |
+| **Format changes over time** | SEC disclosure rules changed in 2006 — pre-2006 tables have different column names ("Securities Underlying Options" vs "Option Awards"), different structures, and often lack a Total column |
+| **Tables break across pages** | A single Summary Compensation Table often spans multiple pages, and PDF parsers extract them as separate fragments that need to be intelligently merged |
+| **Similar tables cause confusion** | Each proxy contains multiple compensation-related tables (director compensation, equity grants, pension benefits) that look similar to the Summary Compensation Table but contain different data |
+| **No clean dataset exists** | Services like ExecuComp provide curated data but are expensive and limited in coverage. Raw SEC filings are free but require significant processing |
+
+This project automates the entire extraction pipeline using vision-language models, producing structured JSON from raw filings with minimal manual intervention.
 ## Overview
 ![Schema](docs/schema.png)
 
