@@ -121,6 +121,7 @@ Configuration in script:
 
 **Output JSON:**
 ```json
+[...
 {
     "name": "Luca Mignini",
     "title": "Former Executive Vice President - Strategic Initiatives",
@@ -134,6 +135,8 @@ Configuration in script:
     "other_compensation": 228655,
     "total": 3121716
 }
+...
+]
 ```
 
 ---

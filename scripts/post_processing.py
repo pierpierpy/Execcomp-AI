@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from collections import Counter
 
-from datasets import Dataset, Image as HFImage
+from datasets import Dataset, DatasetDict, Image as HFImage
 from huggingface_hub import HfApi
 from tqdm.auto import tqdm
 
@@ -347,11 +347,32 @@ def main():
         records = [r for r in records if r["sct_probability"] >= SCT_PROBABILITY_THRESHOLD]
         print(f"\n⚡ Filtered: {original_count} → {len(records)} (threshold={SCT_PROBABILITY_THRESHOLD})")
     
-    # Create HF dataset
-    print("\nCreating HuggingFace dataset...")
-    hf_dataset = Dataset.from_list(records)
-    hf_dataset = hf_dataset.cast_column("table_image", HFImage())
-    print(f"✓ Dataset: {hf_dataset}")
+    # Create HF dataset with yearly splits
+    print("\nCreating HuggingFace dataset with yearly splits...")
+    
+    # Group records by year
+    records_by_year = {}
+    for record in records:
+        year = record.get("year")
+        if year not in records_by_year:
+            records_by_year[year] = []
+        records_by_year[year].append(record)
+    
+    # Create DatasetDict with "train" (all) + one split per year
+    splits = {"train": Dataset.from_list(records)}
+    for year in sorted(records_by_year.keys()):
+        split_name = f"year_{year}"
+        splits[split_name] = Dataset.from_list(records_by_year[year])
+    
+    hf_dataset = DatasetDict(splits)
+    
+    # Cast image column for all splits
+    for split_name in hf_dataset:
+        hf_dataset[split_name] = hf_dataset[split_name].cast_column("table_image", HFImage())
+    
+    print(f"✓ Dataset with {len(hf_dataset)} splits:")
+    for split_name, split_data in hf_dataset.items():
+        print(f"  - {split_name}: {len(split_data):,} records")
     
     # Save locally (always)
     print(f"\nSaving to {HF_LOCAL_PATH}...")
