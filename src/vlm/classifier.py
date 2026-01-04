@@ -95,12 +95,12 @@ class SCTClassifier:
             else:
                 self.model_path = self.DEFAULT_HF_REPO
                 self._is_hf_repo = True
-        elif isinstance(model_path, Path) or (isinstance(model_path, str) and "/" not in model_path):
-            # Local path
+        elif isinstance(model_path, Path) or (isinstance(model_path, str) and model_path.startswith("/")):
+            # Local path (Path object or absolute path starting with /)
             self.model_path = Path(model_path)
             self._is_hf_repo = False
         else:
-            # HuggingFace repo ID (contains /)
+            # HuggingFace repo ID (e.g., "namespace/repo_name")
             self.model_path = model_path
             self._is_hf_repo = True
         

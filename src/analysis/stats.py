@@ -179,6 +179,14 @@ def collect_pipeline_data(output_path: Path, tracker) -> tuple[pd.DataFrame, pd.
     table_df = pd.DataFrame(table_records)
     exec_df = pd.DataFrame(exec_records)
     
+    # Filter out records with invalid fiscal_year (0 or None)
+    # These are likely false positives or malformed data
+    if len(exec_df) > 0 and 'fiscal_year' in exec_df.columns:
+        invalid_years = exec_df['fiscal_year'].isin([0, None]) | exec_df['fiscal_year'].isna()
+        if invalid_years.sum() > 0:
+            print(f"[stats] Filtering out {invalid_years.sum()} records with invalid fiscal_year (0 or None)")
+        exec_df = exec_df[~invalid_years]
+    
     # Convert compensation columns to numeric
     comp_cols = ['salary', 'bonus', 'stock_awards', 'option_awards', 
                  'non_equity_incentive', 'change_in_pension', 'other_compensation', 'total']
@@ -359,10 +367,16 @@ def _generate_charts(
         total_comp = exec_df['total'].dropna()
         total_comp = total_comp[total_comp > 0]
         
-        axes[0].hist(total_comp / 1e6, bins=50, color='#27ae60', edgecolor='white', alpha=0.8)
+        # Clip to 99th percentile for better visualization (outliers distort the histogram)
+        p99 = total_comp.quantile(0.99)
+        total_comp_clipped = total_comp[total_comp <= p99]
+        n_outliers = len(total_comp) - len(total_comp_clipped)
+        
+        axes[0].hist(total_comp_clipped / 1e6, bins=50, color='#27ae60', edgecolor='white', alpha=0.8)
         axes[0].set_xlabel('Total Compensation ($ millions)', fontsize=12)
         axes[0].set_ylabel('Number of Executives', fontsize=12)
-        axes[0].set_title('Distribution of Total Compensation', fontsize=14, fontweight='bold')
+        axes[0].set_title(f'Distribution of Total Compensation (≤99th pctl, {n_outliers} outliers excluded)', 
+                         fontsize=12, fontweight='bold')
         axes[0].axvline(total_comp.median() / 1e6, color='red', linestyle='--', 
                         label=f'Median: ${total_comp.median()/1e6:.1f}M')
         axes[0].legend()
