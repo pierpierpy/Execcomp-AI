@@ -237,3 +237,6 @@ docs/HF_README.md
 notebooks/tests/test_orphan_images_fix.ipynb
 pipeline_tracker.json
 notebooks/tests/see_data.ipynb
+notebooks/tests/merge_tables.ipynb
+.github/copilot-instructions.md
+notebooks/tests/merged_tables_counts.ipynb

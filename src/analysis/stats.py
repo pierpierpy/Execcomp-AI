@@ -24,7 +24,8 @@ def create_table_image(
     title: str,
     output_path: Path,
     col_widths: list[float] = None,
-    highlight_last: bool = False
+    highlight_last: bool = False,
+    highlight_rows: list[int] = None
 ) -> Path:
     """
     Create a table as a PNG image.
@@ -36,16 +37,20 @@ def create_table_image(
         output_path: Full path to save image
         col_widths: Optional column widths
         highlight_last: Whether to highlight last row
+        highlight_rows: List of row indices (0-based) to highlight
     
     Returns:
         Path to saved image
     """
-    fig, ax = plt.subplots(figsize=(8, max(2, len(data) * 0.5 + 1)))
+    # Filter out spacer rows for display (rows where all cells are empty)
+    display_data = [row for row in data if any(cell.strip() for cell in row)]
+    
+    fig, ax = plt.subplots(figsize=(10, max(2, len(display_data) * 0.5 + 1)))
     ax.axis('off')
     
     # Create table
     table = ax.table(
-        cellText=data,
+        cellText=display_data,
         colLabels=headers,
         loc='center',
         cellLoc='left',
@@ -62,23 +67,38 @@ def create_table_image(
         table[(0, i)].set_text_props(color='white', fontweight='bold')
         table[(0, i)].set_facecolor('#2c3e50')
     
-    # Alternating row colors
-    for i in range(1, len(data) + 1):
+    # Row colors and styling
+    for i in range(1, len(display_data) + 1):
+        row_text = display_data[i-1][0] if display_data[i-1] else ""
+        is_header_row = row_text.startswith("📁") or row_text.startswith("📊")
+        is_sub_item = row_text.strip().startswith("├─") or row_text.strip().startswith("└─")
+        
         for j in range(len(headers)):
+            # Base alternating colors
             if i % 2 == 0:
                 table[(i, j)].set_facecolor('#ecf0f1')
             else:
                 table[(i, j)].set_facecolor('white')
             
+            # Highlight header rows (main categories)
+            if is_header_row:
+                table[(i, j)].set_text_props(fontweight='bold')
+                table[(i, j)].set_facecolor('#e8f6f3')
+            
             # Highlight last row if requested
-            if highlight_last and i == len(data):
+            if highlight_last and i == len(display_data):
+                table[(i, j)].set_text_props(fontweight='bold')
+                table[(i, j)].set_facecolor('#d5f5e3')
+            
+            # Highlight specific rows
+            if highlight_rows and (i - 1) in highlight_rows:
                 table[(i, j)].set_text_props(fontweight='bold')
                 table[(i, j)].set_facecolor('#d5f5e3')
     
     # Column widths
     if col_widths:
         for i, w in enumerate(col_widths):
-            for j in range(len(data) + 1):
+            for j in range(len(display_data) + 1):
                 table[(j, i)].set_width(w)
     
     plt.title(title, fontsize=14, fontweight='bold', pad=20)
@@ -179,12 +199,17 @@ def collect_pipeline_data(output_path: Path, tracker) -> tuple[pd.DataFrame, pd.
     table_df = pd.DataFrame(table_records)
     exec_df = pd.DataFrame(exec_records)
     
-    # Filter out records with invalid fiscal_year (0 or None)
-    # These are likely false positives or malformed data
+    # Filter out records with invalid fiscal_year
+    # Valid years: 2000-2030 (reasonable range for SEC filings)
     if len(exec_df) > 0 and 'fiscal_year' in exec_df.columns:
-        invalid_years = exec_df['fiscal_year'].isin([0, None]) | exec_df['fiscal_year'].isna()
+        exec_df['fiscal_year'] = pd.to_numeric(exec_df['fiscal_year'], errors='coerce')
+        invalid_years = (
+            exec_df['fiscal_year'].isna() | 
+            (exec_df['fiscal_year'] < 2000) | 
+            (exec_df['fiscal_year'] > 2022)
+        )
         if invalid_years.sum() > 0:
-            print(f"[stats] Filtering out {invalid_years.sum()} records with invalid fiscal_year (0 or None)")
+            print(f"[stats] Filtering out {invalid_years.sum()} records with invalid fiscal_year (outside 2000-2030)")
         exec_df = exec_df[~invalid_years]
     
     # Convert compensation columns to numeric
@@ -221,20 +246,30 @@ def generate_stats_images(
     table_df, exec_df, stats = collect_pipeline_data(output_path, tracker)
     
     # --- Pipeline Stats Table ---
+    # Calculate percentages for clarity
+    non_funds = stats['total_docs'] - stats['funds']
+    pct_funds = stats['funds'] / stats['total_docs'] * 100
+    pct_with_sct = stats['with_sct'] / non_funds * 100 if non_funds > 0 else 0
+    pct_no_sct = stats['no_sct'] / non_funds * 100 if non_funds > 0 else 0
+    
     generated.append(create_table_image(
         data=[
-            ["Documents processed", f"{stats['total_docs']:,}"],
-            ["Funds (skipped)", f"{stats['funds']:,} ({stats['funds']/stats['total_docs']*100:.1f}%)"],
-            ["With SCT", f"{stats['with_sct']:,}"],
-            ["No SCT", f"{stats['no_sct']:,}"],
-            ["Tables extracted", f"{stats['total_tables']:,}"],
-            ["Multi-table docs", f"{stats['multi_table']:,}"],
+            ["📁 Total documents", f"{stats['total_docs']:,}", ""],
+            ["", "", ""],  # Spacer
+            ["   ├─ 🏦 Funds (skipped)", f"{stats['funds']:,}", f"({pct_funds:.1f}% of total)"],
+            ["   └─ 📄 Companies (processed)", f"{non_funds:,}", f"({100-pct_funds:.1f}% of total)"],
+            ["", "", ""],  # Spacer
+            ["         ├─ ✅ With SCT found", f"{stats['with_sct']:,}", f"({pct_with_sct:.1f}% of companies)"],
+            ["         └─ ❌ No SCT found", f"{stats['no_sct']:,}", f"({pct_no_sct:.1f}% of companies)"],
+            ["", "", ""],  # Spacer
+            ["📊 Total SCT tables extracted", f"{stats['total_tables']:,}", ""],
+            ["   └─ Docs with multiple SCTs", f"{stats['multi_table']:,}", f"({stats['multi_table']/stats['with_sct']*100:.1f}% of docs with SCT)" if stats['with_sct'] > 0 else ""],
         ],
-        headers=["Metric", "Value"],
+        headers=["Category", "Count", "Notes"],
         title=f"Pipeline Statistics (updated {today})",
         output_path=docs_path / "stats_pipeline.png",
-        col_widths=[0.5, 0.3],
-        highlight_last=True
+        col_widths=[0.45, 0.2, 0.35],
+        highlight_last=False
     ))
     
     if len(exec_df) > 0:
@@ -255,10 +290,17 @@ def generate_stats_images(
             col_widths=[0.5, 0.3]
         ))
         
-        # --- Top 10 Table ---
-        top_execs = exec_df.nlargest(10, 'total')[['name', 'company', 'fiscal_year', 'total']].copy()
+        # --- Top 10 Table (deduplicated) ---
+        # Same executive may appear multiple times across different SEC filings
+        # Deduplicate by (name, company, fiscal_year, rounded_total)
+        top_candidates = exec_df.nlargest(100, 'total')[['name', 'company', 'fiscal_year', 'total']].copy()
+        top_candidates['total_rounded'] = (top_candidates['total'] / 1e6).round(1)
+        top_candidates = top_candidates.drop_duplicates(
+            subset=['name', 'company', 'fiscal_year', 'total_rounded']
+        ).head(10)
+        
         top_data = []
-        for _, row in top_execs.iterrows():
+        for _, row in top_candidates.iterrows():
             top_data.append([
                 row['name'][:30],
                 row['company'][:25],
