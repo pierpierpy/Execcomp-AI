@@ -205,7 +205,7 @@ def collect_pipeline_data(output_path: Path, tracker) -> tuple[pd.DataFrame, pd.
         exec_df['fiscal_year'] = pd.to_numeric(exec_df['fiscal_year'], errors='coerce')
         invalid_years = (
             exec_df['fiscal_year'].isna() | 
-            (exec_df['fiscal_year'] < 2000) | 
+            (exec_df['fiscal_year'] < 2005) | 
             (exec_df['fiscal_year'] > 2022)
         )
         if invalid_years.sum() > 0:
