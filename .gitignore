@@ -240,3 +240,7 @@ notebooks/tests/see_data.ipynb
 notebooks/tests/merge_tables.ipynb
 .github/copilot-instructions.md
 notebooks/tests/merged_tables_counts.ipynb
+hf_home/stored_tokens
+hf_home/token
+hf_home/xet/*
+hf_home/*

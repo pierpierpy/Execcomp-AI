@@ -13,7 +13,7 @@ from datetime import datetime, date
 # ============== CONFIGURATION ==============
 PDFS_DIR = "pdfs"
 OUTPUT_DIR = "output"
-USER_AGENT = "Research Bot"
+USER_AGENT = "piergiorgio.dipasquale@research.it"
 PDF_PAGE_SIZE = "A4"
 PDF_ORIENTATION = "Portrait"
 TXT_FONT_SIZE = 10
@@ -29,32 +29,47 @@ def json_serial(obj):
     raise TypeError(f"Type {type(obj)} not serializable")
 
 
-def html_to_pdf(url: str, output_path: str) -> bool:
-    """Convert HTML to PDF."""
+def html_to_pdf(url: str, output_path: str, timeout: int = 60) -> bool:
+    """Convert HTML to PDF with timeout."""
+    import subprocess
+    temp_path = None
     try:
         headers = {"User-Agent": USER_AGENT}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
         
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
             f.write(response.text)
             temp_path = f.name
         
-        options = {
-            'disable-external-links': '',
-            'no-images': '',
-            'disable-javascript': '',
-            'load-error-handling': 'ignore',
-            'load-media-error-handling': 'ignore',
-            'page-size': PDF_PAGE_SIZE,
-            'orientation': PDF_ORIENTATION,
-        }
+        cmd = [
+            'wkhtmltopdf',
+            '--disable-external-links',
+            '--no-images',
+            '--disable-javascript',
+            '--load-error-handling', 'ignore',
+            '--load-media-error-handling', 'ignore',
+            '--page-size', PDF_PAGE_SIZE,
+            '--orientation', PDF_ORIENTATION,
+            '--quiet',
+            temp_path,
+            output_path
+        ]
         
-        pdfkit.from_file(temp_path, output_path, options=options)
+        subprocess.run(cmd, timeout=timeout, check=True, capture_output=True)
         Path(temp_path).unlink()
         return True
+    except subprocess.TimeoutExpired:
+        print(f"Timeout ({timeout}s) converting: {url[:80]}...")
+        if temp_path and Path(temp_path).exists():
+            Path(temp_path).unlink()
+        if Path(output_path).exists():
+            Path(output_path).unlink()
+        return False
     except Exception as e:
         print(f"Error converting HTML: {e}")
+        if temp_path and Path(temp_path).exists():
+            Path(temp_path).unlink()
         return False
 
 
