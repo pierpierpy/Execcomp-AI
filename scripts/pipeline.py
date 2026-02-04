@@ -29,7 +29,7 @@ CONTINUE_MODE = False
 
 # Filter by years (empty list = all years)
 # Examples: [2020, 2021, 2022] or range(2015, 2023)
-YEARS_FILTER = [2015,2014,2013,2012]  # e.g., [2020, 2021] or list(range(2005, 2010))
+YEARS_FILTER = [2011,2010,2009,2008]  # e.g., [2020, 2021] or list(range(2005, 2010))
 
 # =============================================================================
 # PATHS
